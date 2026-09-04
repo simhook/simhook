@@ -57,7 +57,7 @@ class GatewayViewModel(private val container: AppContainer, private val appConte
     }
 
     fun unpair() {
-        viewModelScope.launch { container.unpairLocally() }
+        viewModelScope.launch { container.unpair() }
     }
 
     private fun patch(p: DevicePatch) {

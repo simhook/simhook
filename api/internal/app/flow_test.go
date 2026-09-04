@@ -417,9 +417,11 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("push token should be invalidated: %s", r.raw)
 	}
 
-	// Unpair revokes the device token.
-	dev.must("DELETE", "/v1/devices/"+deviceID, nil, 204)
+	// The phone can unpair itself, which revokes its token; the dashboard
+	// then no longer finds it.
+	phone.must("DELETE", "/v1/device", nil, 204)
 	phone.must("GET", "/v1/device", nil, 401)
+	dev.must("DELETE", "/v1/devices/"+deviceID, nil, 404)
 	r = dev.must("GET", "/v1/devices", nil, 200)
 	if n := len(r.body["data"].([]any)); n != 0 {
 		t.Fatalf("device list after unpair: %s", r.raw)

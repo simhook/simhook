@@ -142,7 +142,7 @@ fun SettingsScreen(vm: GatewayViewModel, modifier: Modifier = Modifier) {
 
         OutlinedButton(onClick = { confirmUnpair = true }, modifier = Modifier.fillMaxWidth()) { Text("Unpair this phone") }
         Text(
-            "Unpairing clears this phone's credentials. Remove the device from the dashboard as well to stop sends being routed to it.",
+            "Unpairing removes this phone from your account. Message history stays in the dashboard.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

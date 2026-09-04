@@ -47,6 +47,10 @@ class ApiClient(
         post<Unit>("/v1/device/push-token", AppJson.encodeToString(PushTokenRequest(token)))
     }
 
+    suspend fun unpair() {
+        execute<Unit>("/v1/device", "DELETE", null, auth = true)
+    }
+
     suspend fun reportStatus(messageId: String, report: StatusReport): Message =
         post<MessageEnvelope>("/v1/device/messages/$messageId/status", AppJson.encodeToString(report)).message
 

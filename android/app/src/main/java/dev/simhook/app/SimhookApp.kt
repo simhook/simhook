@@ -106,7 +106,13 @@ class AppContainer(private val context: Context) {
         return device
     }
 
-    /** Forget this pairing locally. The server is told by the dashboard, or already has. */
+    /** Unpair on the server when reachable, then forget the pairing locally either way. */
+    suspend fun unpair() {
+        runCatching { api.unpair() }
+        unpairLocally()
+    }
+
+    /** Forget this pairing locally. Used when the server already revoked the phone. */
     suspend fun unpairLocally() {
         HeartbeatScheduler.cancel(context)
         GatewayService.stop(context)

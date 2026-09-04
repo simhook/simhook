@@ -146,6 +146,21 @@ func (s *Server) registerPhone() {
 	})
 
 	huma.Register(s.api, huma.Operation{
+		OperationID: "device-unpair", Method: http.MethodDelete, Path: "/v1/device",
+		Summary: "Unpair this phone", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityDevice,
+		Description: "Removes this phone from the account and revokes its token. Message history is kept.",
+	}, func(ctx context.Context, _ *struct{}) (*emptyOutput, error) {
+		p, err := requireDevice(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.deps.Gateway.UnpairDevice(ctx, p.Device.UserID, p.Device.ID); err != nil {
+			return nil, mapErr(ctx, s.deps.Log, err)
+		}
+		return &emptyOutput{}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
 		OperationID: "device-heartbeat", Method: http.MethodPost, Path: "/v1/device/heartbeat",
 		Summary: "Check in", Tags: tags, Security: securityDevice,
 		Description: "Reports the phone is alive and uploads its state. The response carries the settings the phone should apply.",
