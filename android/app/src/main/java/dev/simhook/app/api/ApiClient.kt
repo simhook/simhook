@@ -1,5 +1,6 @@
 package dev.simhook.app.api
 
+import android.util.Log
 import dev.simhook.app.core.AppJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -82,31 +83,41 @@ class ApiClient(
     private suspend inline fun <reified T> patch(path: String, body: String): T = execute(path, "PATCH", body, auth = true)
 
     private suspend inline fun <reified T> execute(path: String, method: String, body: String?, auth: Boolean): T = withContext(Dispatchers.IO) {
-        val builder = Request.Builder()
-            .url(baseUrl().trimEnd('/') + path)
-            .method(method, body?.toRequestBody(JSON))
-            .header("User-Agent", userAgent)
-            .header("Accept", "application/json")
-        if (auth) {
-            val token = deviceToken() ?: throw ApiException(401, "not_paired", "This phone is not paired.")
-            builder.header("Authorization", "Bearer $token")
-        }
-        http.newCall(builder.build()).execute().use { response ->
-            val text = response.body.string()
-            if (!response.isSuccessful) {
-                val parsed = runCatching { AppJson.decodeFromString(ApiErrorBody.serializer(), text) }.getOrNull()
-                throw ApiException(
-                    response.code,
-                    parsed?.code ?: "http_${response.code}",
-                    parsed?.message?.takeIf { it.isNotBlank() } ?: "Request failed with HTTP ${response.code}",
-                )
+        val url = baseUrl().trimEnd('/') + path
+        try {
+            val builder = Request.Builder()
+                .url(url)
+                .method(method, body?.toRequestBody(JSON))
+                .header("User-Agent", userAgent)
+                .header("Accept", "application/json")
+            if (auth) {
+                val token = deviceToken() ?: throw ApiException(401, "not_paired", "This phone is not paired.")
+                builder.header("Authorization", "Bearer $token")
             }
-            if (T::class == Unit::class) return@use Unit as T
-            AppJson.decodeFromString(text)
+            http.newCall(builder.build()).execute().use { response ->
+                val text = response.body.string()
+                if (!response.isSuccessful) {
+                    val parsed = runCatching { AppJson.decodeFromString(ApiErrorBody.serializer(), text) }.getOrNull()
+                    throw ApiException(
+                        response.code,
+                        parsed?.code ?: "http_${response.code}",
+                        parsed?.message?.takeIf { it.isNotBlank() } ?: "Request failed with HTTP ${response.code}",
+                    )
+                }
+                if (T::class == Unit::class) return@use Unit as T
+                AppJson.decodeFromString(text)
+            }
+        } catch (e: ApiException) {
+            Log.w(TAG, "$method $url -> ${e.status} ${e.code}: ${e.message}")
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "$method $url failed", e)
+            throw e
         }
     }
 
     companion object {
+        private const val TAG = "ApiClient"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

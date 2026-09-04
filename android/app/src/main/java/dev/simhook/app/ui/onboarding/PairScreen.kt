@@ -52,47 +52,47 @@ fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> U
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(link) {
-        if (link != null) {
-            code = link.code
-            link.api?.let { apiUrl = it; showServer = it != AppSettings.DEFAULT_API_URL }
-            onLinkConsumed()
-        }
-    }
-
-    fun applyScan(raw: String) {
-        val parsed = PairLink.parse(raw)
-        if (parsed == null) {
-            error = "That QR code is not a pairing code."
-            return
-        }
-        code = parsed.code
-        parsed.api?.let { apiUrl = it; showServer = it != AppSettings.DEFAULT_API_URL }
-        error = null
-    }
-
-    fun scan() {
-        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-        GmsBarcodeScanning.getClient(context, options).startScan()
-            .addOnSuccessListener { barcode -> barcode.rawValue?.let(::applyScan) }
-            .addOnFailureListener { error = "The scanner could not open. Type the code instead." }
-    }
-
-    fun pair() {
+    fun pair(withCode: String = code, withApi: String = apiUrl) {
+        if (busy) return
         scope.launch {
             busy = true
             error = null
             try {
                 val token = Push.token(context)
-                container.pair(code.trim(), apiUrl.trim(), token)
+                container.pair(withCode.trim(), withApi.trim(), token)
             } catch (e: ApiException) {
                 error = e.message
             } catch (e: Exception) {
-                error = "Could not reach the server. Check the address and your connection."
+                error = "Could not reach the server. Check the address and your connection. (${e.javaClass.simpleName}: ${e.message})"
             } finally {
                 busy = false
             }
         }
+    }
+
+    // A link or scanned code carries everything needed, so it pairs at once.
+    fun applyLink(parsed: PairLink) {
+        code = parsed.code
+        parsed.api?.let { apiUrl = it; showServer = it != AppSettings.DEFAULT_API_URL }
+        error = null
+        pair(parsed.code, parsed.api ?: apiUrl)
+    }
+
+    LaunchedEffect(link) {
+        if (link != null) {
+            onLinkConsumed()
+            applyLink(link)
+        }
+    }
+
+    fun scan() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { barcode ->
+                val parsed = barcode.rawValue?.let(PairLink::parse)
+                if (parsed == null) error = "That QR code is not a pairing code." else applyLink(parsed)
+            }
+            .addOnFailureListener { error = "The scanner could not open. Type the code instead." }
     }
 
     Column(

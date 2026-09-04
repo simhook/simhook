@@ -20,6 +20,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -40,6 +41,9 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
     val busy by vm.busy.collectAsStateWithLifecycle()
     val pushAvailable = remember { Push.available(context) }
     val sims = remember(settings.deviceId) { SimInfo.list(context) }
+
+    // Settings changed from the dashboard should show up as soon as the app is opened.
+    LaunchedEffect(Unit) { vm.refresh() }
 
     Column(
         modifier = modifier
