@@ -22,6 +22,8 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+android/.kotlin/
+android/app/release/
 android/.idea/
 android/*.iml
 

@@ -44,7 +44,8 @@ type devicePatchBody struct {
 	ReceiveEnabled             *bool   `json:"receive_enabled,omitempty" doc:"Forward incoming SMS from this phone."`
 	SendDelaySeconds           *int32  `json:"send_delay_seconds,omitempty" minimum:"0" maximum:"3600" doc:"Pause between consecutive sends on the phone."`
 	HeartbeatIntervalMinutes   *int32  `json:"heartbeat_interval_minutes,omitempty" minimum:"15" maximum:"1440"`
-	PreferredSimSubscriptionID *int32  `json:"preferred_sim_subscription_id,omitempty" doc:"SIM to send from when a send names none. Send null to clear."`
+	PreferredSimSubscriptionID *int32  `json:"preferred_sim_subscription_id,omitempty" doc:"SIM to send from when a send names none."`
+	ClearPreferredSim          bool    `json:"clear_preferred_sim,omitempty" doc:"Set true to fall back to the phone's default SIM."`
 }
 
 type updateDeviceInput struct {
@@ -56,7 +57,7 @@ func (b devicePatchBody) patch() gateway.DevicePatch {
 	return gateway.DevicePatch{
 		Name: b.Name, Enabled: b.Enabled, ReceiveEnabled: b.ReceiveEnabled,
 		SendDelaySeconds: b.SendDelaySeconds, HeartbeatIntervalMinutes: b.HeartbeatIntervalMinutes,
-		PreferredSimSubscriptionID: b.PreferredSimSubscriptionID,
+		PreferredSimSubscriptionID: b.PreferredSimSubscriptionID, ClearPreferredSim: b.ClearPreferredSim,
 	}
 }
 
