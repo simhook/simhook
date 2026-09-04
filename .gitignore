@@ -1,0 +1,32 @@
+# Node
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# Go
+api/bin/
+api/coverage.out
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+google-services.json
+firebase-*.json
+*.keystore
+*.jks
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

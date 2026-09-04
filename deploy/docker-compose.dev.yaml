@@ -1,0 +1,30 @@
+# Local development dependencies. The API and web app run on the host.
+#   docker compose -f deploy/docker-compose.dev.yaml up -d
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: simhook-postgres
+    environment:
+      POSTGRES_USER: simhook
+      POSTGRES_PASSWORD: simhook
+      POSTGRES_DB: simhook
+    ports:
+      - "5432:5432"
+    volumes:
+      - simhook-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simhook -d simhook"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Catches every email the API sends in dev. UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: simhook-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  simhook-pgdata:
