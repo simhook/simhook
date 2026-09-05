@@ -12,7 +12,10 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@simhook/sdk": ["../sdk/src/index.ts"]
+    }
   },
   "include": ["src", "test", "tsdown.config.ts"]
 }
