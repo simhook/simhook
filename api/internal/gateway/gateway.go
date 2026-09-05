@@ -236,7 +236,12 @@ func (s *Service) UpdateDevice(ctx context.Context, userID, id uuid.UUID, p Devi
 	if _, err := s.st.GetUserDevice(ctx, userID, id); err != nil {
 		return store.Device{}, err
 	}
-	return s.st.UpdateDeviceSettings(ctx, id, store.DeviceSettingsPatch(p))
+	d, err := s.st.UpdateDeviceSettings(ctx, id, store.DeviceSettingsPatch(p))
+	if err != nil {
+		return store.Device{}, err
+	}
+	s.nudge(ctx, d)
+	return d, nil
 }
 
 // UpdateOwnDevice applies the settings a phone may change about itself.
@@ -253,12 +258,45 @@ func (s *Service) SetDefaultDevice(ctx context.Context, userID, id uuid.UUID) (s
 	if err := s.st.SetDefaultDevice(ctx, userID, id); err != nil {
 		return store.Device{}, err
 	}
-	return s.st.GetUserDevice(ctx, userID, id)
+	d, err := s.st.GetUserDevice(ctx, userID, id)
+	if err != nil {
+		return store.Device{}, err
+	}
+	s.nudge(ctx, d)
+	return d, nil
 }
 
-// UnpairDevice removes a phone. Its message history is kept.
+// UnpairDevice removes a phone. Its message history is kept. The phone is
+// nudged so it notices within seconds that its token is gone.
 func (s *Service) UnpairDevice(ctx context.Context, userID, id uuid.UUID) error {
-	return s.st.SoftDeleteDevice(ctx, userID, id)
+	d, err := s.st.GetUserDevice(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if err := s.st.SoftDeleteDevice(ctx, userID, id); err != nil {
+		return err
+	}
+	s.nudge(ctx, d)
+	return nil
+}
+
+// nudge asks a phone to check in now, so a change made in the dashboard or
+// through the API reaches it within seconds rather than at its next scheduled
+// heartbeat. Best effort: a phone that is offline picks the change up later.
+func (s *Service) nudge(ctx context.Context, d store.Device) {
+	if d.PushToken == nil || *d.PushToken == "" || d.PushTokenInvalidatedAt != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	results, err := s.push.Send(ctx, []push.Message{{Token: *d.PushToken, Data: map[string]string{"type": "heartbeat"}, TTL: 5 * time.Minute, CollapseKey: "heartbeat"}})
+	if err != nil {
+		s.log.Warn("device nudge failed", "device", d.ID, "err", err)
+		return
+	}
+	if len(results) == 1 && results[0].TokenInvalid {
+		_ = s.st.InvalidatePushToken(ctx, d.ID, "rejected by push service during nudge")
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -128,3 +128,10 @@ Texts in the WebOTP or SMS Retriever formats (`@domain #code`) are delayed the s
 **Why:** The workload is small. The phones do the heavy lifting; the server routes pushes and stores rows. One host with off-site backups is cheaper and easier to reason about than managed services, and nothing in the design prevents splitting it later.
 
 Behind the proxy the API trusts forwarded client addresses only when `SIMHOOK_TRUST_PROXY` is set, so a directly exposed instance cannot be fooled about who is calling.
+
+## 011. Forwarding on by default, and phones follow dashboard changes at once
+
+**Date:** 2026-09-05
+**Decision:** A newly paired phone forwards incoming SMS by default. Any change to a phone made through the dashboard or the API (settings, default phone, unpairing) sends the phone the same check-in push the presence sweep uses, so it reloads its settings within seconds instead of at its next scheduled heartbeat.
+
+**Why:** In the first production test the phone forwarded nothing because the switch defaulted to off, and the fix made in the dashboard took a heartbeat interval to arrive. Receiving is a headline feature and the user grants the SMS permission during setup, so off-by-default was only a trap. Reusing the check-in push means no new app code and no new message type.

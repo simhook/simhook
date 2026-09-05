@@ -305,6 +305,9 @@ func TestEndToEnd(t *testing.T) {
 	if r.body["device"].(map[string]any)["is_default"] != true {
 		t.Fatalf("first device should be default: %s", r.raw)
 	}
+	if r.body["device"].(map[string]any)["receive_enabled"] != true {
+		t.Fatalf("a new device should forward incoming SMS: %s", r.raw)
+	}
 	phone.must("POST", "/v1/device/pair", map[string]any{"code": code, "hardware_key": "hw-pixel-0002"}, 400) // code consumed
 	phone.must("GET", "/v1/devices", nil, 401)                                                                // device token is not a user
 
