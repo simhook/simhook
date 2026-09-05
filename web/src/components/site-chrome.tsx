@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * The shell every simhook page shares with simhook.dev: a 960 px container,
+ * The shell every simhook page shares with simhook.dev: an 1120 px container,
  * a bar of words at the top, and the same footer at the bottom. Only the
  * words in the bar differ between the site, sign-in, and the app.
  */
@@ -18,7 +18,7 @@ export const PUBLIC_LINKS = [
 ] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
-  return <div className="mx-auto flex min-h-screen w-full max-w-[960px] flex-col px-6">{children}</div>;
+  return <div className="mx-auto flex min-h-screen w-full max-w-[1120px] flex-col px-6">{children}</div>;
 }
 
 export function Bar({

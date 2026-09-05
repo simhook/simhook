@@ -1,4 +1,4 @@
-/* simhook: one shell for every page, on the site and in the app. A 960 px
+/* simhook: one shell for every page, on the site and in the app. An 1120 px
    container holds the bar and the footer in the same place everywhere; the
    text inside keeps a reading measure. Black on white, a sans for words and
    a mono for anything a machine wrote. Light only, on purpose. */
@@ -14,8 +14,8 @@
   --bad: #b91c1c;
   --sans: "Instrument Sans Variable", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
-  --col: 960px;
-  --measure: 640px;
+  --col: 1120px;
+  --measure: 720px;
   color-scheme: light;
 }
 
@@ -47,8 +47,8 @@ a:hover { text-decoration-color: var(--fg); }
 /* the shell */
 .page { max-width: var(--col); margin: 0 auto; padding: 0 24px; min-height: 100vh; display: flex; flex-direction: column; }
 main { display: block; width: 100%; max-width: var(--measure); margin: 0 auto; flex: 1; }
-main.measure-doc { --measure: 760px; }
-main.measure-form { --measure: 400px; }
+main.measure-doc { --measure: 840px; }
+main.measure-form { --measure: 440px; }
 main > section { margin-top: 48px; }
 
 nav.top {

@@ -10,7 +10,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         <SignedInRedirect />
       </Suspense>
       <Bar links={PUBLIC_LINKS} right={<span className="text-foreground">Sign in</span>} />
-      <main className="mx-auto w-full max-w-[400px] flex-1 pt-12">{children}</main>
+      <main className="mx-auto w-full max-w-[440px] flex-1 pt-12">{children}</main>
       <Footer />
     </Shell>
   );
