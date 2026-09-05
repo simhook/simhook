@@ -10,8 +10,8 @@ web/         Next.js dashboard
 android/     Kotlin + Jetpack Compose phone app
 packages/
   contracts/ OpenAPI spec generated from the API, plus generated TypeScript types
-  sdk/       @simhook/sdk
-  mcp/       @simhook/mcp
+  sdk/       @simhook/sdk, the TypeScript client
+  mcp/       @simhook/mcp, an MCP server for AI agents
 deploy/      docker compose, reverse proxy, service units
 docs/        architecture study, decisions
 ```
@@ -32,5 +32,20 @@ The Android app builds with the Gradle wrapper. Push needs a Firebase config at 
 cd android && ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The JavaScript packages share one pnpm workspace:
+
+```
+pnpm install
+pnpm build      # dashboard, SDK, and MCP server
+pnpm test       # SDK and MCP server test suites
+pnpm contracts  # regenerate TypeScript types after changing the API
+```
+
+## Using the API
+
+- REST: authenticate with an API key in the `X-Api-Key` header. The OpenAPI document lives at `packages/contracts/openapi.json`.
+- JavaScript/TypeScript: `npm install @simhook/sdk`. See `packages/sdk/README.md`.
+- AI agents: `npx -y @simhook/mcp` with `SIMHOOK_API_KEY` set. See `packages/mcp/README.md`.
 
 See `docs/decisions.md` for the why behind the stack.

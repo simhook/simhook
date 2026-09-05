@@ -102,3 +102,11 @@ pnpm workspaces for the JS packages. Go and Gradle are their own toolchains.
 | queued, dispatched | unknown | no report within the stale window |
 
 Batch counters are incremented atomically on each transition, never recomputed by scanning.
+
+## 008. SDK and MCP server
+
+**Date:** 2026-09-05
+**Decision:** `@simhook/sdk` is a hand-written, dependency-free TypeScript client over `fetch` and Web Crypto, so the same build runs on Node 20+, edge runtimes, and in browsers. Its types are bundled from the OpenAPI contract at build time; the published package has no workspace dependency. Request and response fields keep the API's snake_case names: the SDK is a typed transport, not a translation layer. Reads retry on transient failures; writes never retry, because a duplicated send is worse than a failed one.
+
+`@simhook/mcp` wraps the SDK with the official MCP TypeScript SDK over stdio and exposes a small tool set for agent workflows: send, follow a send, list and fetch messages, wait for an incoming message, list phones, account usage, and segment counting. Long waits stop below common client request timeouts and hand back a `since` value so the agent can continue, instead of holding a request open.
+

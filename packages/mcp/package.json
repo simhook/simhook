@@ -1,0 +1,48 @@
+{
+  "name": "@simhook/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets AI agents send and read SMS through simhook.",
+  "keywords": ["mcp", "model context protocol", "sms", "simhook", "agent"],
+  "homepage": "https://simhook.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simhook/simhook.git",
+    "directory": "packages/mcp"
+  },
+  "type": "module",
+  "bin": {
+    "simhook-mcp": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@simhook/sdk": "workspace:^",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
