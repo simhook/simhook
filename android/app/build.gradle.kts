@@ -20,7 +20,9 @@ android {
     defaultConfig {
         applicationId = "dev.simhook.app"
         minSdk = 26
-        targetSdk = 37
+        // Stays at 36 on purpose: Android 17 withholds one-time-code texts from apps
+        // targeting 37 for three hours unless they are the default SMS app. See docs/decisions.md 009.
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         vectorDrawables.useSupportLibrary = true

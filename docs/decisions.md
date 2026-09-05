@@ -110,3 +110,12 @@ Batch counters are incremented atomically on each transition, never recomputed b
 
 `@simhook/mcp` wraps the SDK with the official MCP TypeScript SDK over stdio and exposes a small tool set for agent workflows: send, follow a send, list and fetch messages, wait for an incoming message, list phones, account usage, and segment counting. Long waits stop below common client request timeouts and hand back a `since` value so the agent can continue, instead of holding a request open.
 
+
+## 009. Phone app targets API 36
+
+**Date:** 2026-09-05
+**Decision:** The Android app compiles against the newest SDK but keeps `targetSdk = 36` until it can act as the phone's default SMS app.
+
+**Why:** Android 17 withholds any incoming SMS that looks like a one-time code from apps targeting API 37 or higher for three hours: the received-SMS broadcast is not delivered and SMS provider queries are filtered, unless the app holds the default SMS role or a similar system role. Verified on the Android 17 emulator: at target 37 a text reading "your code is 8888" never reached the app; at target 36 it was forwarded within a second. Relaying verification codes is a core use of the product, and the app ships as a direct APK download, so no store deadline forces the target up.
+
+Texts in the WebOTP or SMS Retriever formats (`@domain #code`) are delayed the same way on Android 16 QPR2 and newer regardless of target. That format is rare outside app-specific flows and is documented as a limitation. The way out is an optional mode in which the app takes the default SMS role; that is a later phase.
