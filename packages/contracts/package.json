@@ -1,6 +1,7 @@
 {
   "name": "@simhook/contracts",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "OpenAPI document and generated TypeScript types for the simhook API.",
   "type": "module",

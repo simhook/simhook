@@ -5,7 +5,7 @@
 //   node scripts/android-release.mjs --publish       ...and create the GitHub release with the APK and manifest
 //
 // Options
-//   --repo owner/name        releases repository (default: $SIMHOOK_RELEASES_REPO or simhook/releases)
+//   --repo owner/name        releases repository (default: $SIMHOOK_RELEASES_REPO or simhook/simhook)
 //   --notes-file path        release notes in Markdown; the first paragraph also goes into the manifest
 //   --min-code N             oldest version code the server still supports (default 1)
 //   --apk-base-url url       where the APK will be downloadable from (default: the GitHub release)
@@ -27,7 +27,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const android = path.join(root, "android");
 const win = process.platform === "win32";
 const args = parseArgs(process.argv.slice(2));
-const repo = args.repo ?? process.env.SIMHOOK_RELEASES_REPO ?? "simhook/releases";
+const repo = args.repo ?? process.env.SIMHOOK_RELEASES_REPO ?? "simhook/simhook";
 const minCode = Number(args["min-code"] ?? 1);
 const expectedCert = (args["cert-sha256"] ?? SIMHOOK_RELEASE_CERT_SHA256).toLowerCase();
 

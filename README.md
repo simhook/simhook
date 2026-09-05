@@ -50,6 +50,12 @@ pnpm contracts  # regenerate TypeScript types after changing the API
 - JavaScript/TypeScript: `npm install @simhook/sdk`. See `packages/sdk/README.md`.
 - AI agents: `npx -y @simhook/mcp` with `SIMHOOK_API_KEY` set. See `packages/mcp/README.md`.
 
+## License
+
+The API, dashboard, Android app, and deployment files are under the [GNU AGPL v3](LICENSE): use it, self-host it, change it, and if you run a modified version as a service, publish your changes. The client packages under `packages/` (`@simhook/sdk`, `@simhook/mcp`, `@simhook/contracts`) are [MIT](packages/sdk/LICENSE) so they fit into any project.
+
+Security reports: see [SECURITY.md](SECURITY.md).
+
 ## Deploying
 
 One host, Docker Compose, Cloudflare in front. The runbook is `deploy/README.md`; the same files work for self-hosting. CI builds container images for the API and dashboard on every push to main.

@@ -1,8 +1,16 @@
 {
   "name": "@simhook/sdk",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Send and receive SMS through your own Android phone with the simhook API.",
-  "keywords": ["sms", "text message", "android", "gateway", "webhooks", "simhook"],
+  "keywords": [
+    "sms",
+    "text message",
+    "android",
+    "gateway",
+    "webhooks",
+    "simhook"
+  ],
   "homepage": "https://simhook.dev",
   "repository": {
     "type": "git",
@@ -27,7 +35,10 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20"
   },

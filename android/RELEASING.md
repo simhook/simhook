@@ -50,7 +50,7 @@ The git tag is `android-v<versionName>`. Test builds can override both without e
    node scripts/android-release.mjs --skip-build --publish --notes-file notes.md
    ```
 
-   The script creates the GitHub release `android-v<version>` in the releases repository (`--repo`, default `simhook/releases`) with the four files and marks it latest. Nothing else changes: `https://simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release, so installed apps pick the new build up within twelve hours, or the next time someone opens the app.
+   The script creates the GitHub release `android-v<version>` in the releases repository (`--repo`, default `simhook/simhook`) with the four files and marks it latest. Nothing else changes: `https://simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release, so installed apps pick the new build up within twelve hours, or the next time someone opens the app.
 
 If a build must not be offered to older apps, pass `--min-code <versionCode>`: apps below it show the update as required.
 
@@ -63,7 +63,7 @@ If a build must not be offered to older apps, pass `--min-code <versionCode>`: a
   "version_code": 2,
   "version_name": "0.1.0",
   "min_supported_version_code": 1,
-  "apk_url": "https://github.com/simhook/releases/releases/download/android-v0.1.0/simhook-0.1.0.apk",
+  "apk_url": "https://github.com/simhook/simhook/releases/download/android-v0.1.0/simhook-0.1.0.apk",
   "sha256": "…",
   "size_bytes": 8412345,
   "released_at": "2026-09-05T14:00:00.000Z",

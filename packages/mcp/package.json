@@ -1,8 +1,15 @@
 {
   "name": "@simhook/mcp",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "MCP server that lets AI agents send and read SMS through simhook.",
-  "keywords": ["mcp", "model context protocol", "sms", "simhook", "agent"],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "sms",
+    "simhook",
+    "agent"
+  ],
   "homepage": "https://simhook.dev",
   "repository": {
     "type": "git",
@@ -20,7 +27,10 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20"
   },

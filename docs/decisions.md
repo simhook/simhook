@@ -144,3 +144,10 @@ Behind the proxy the API trusts forwarded client addresses only when `SIMHOOK_TR
 The app polls the manifest twice a day and on opening, offers a newer build on its home screen, downloads it through the system download manager, verifies the hash, and hands the file to the package installer, which enforces that the signature matches. A `min_supported_version_code` in the manifest marks builds the server no longer supports so the app can say the update is required.
 
 **Why:** Sideloaded apps get no store updates, and a gateway that nobody opens must still learn about fixes. Polling a tiny JSON file costs nothing and needs no server code; verifying the hash and letting Android check the signature means a compromised download host cannot push a foreign build. Version and manifest are produced by one script from the same Gradle values, so the APK and what it advertises cannot disagree.
+
+## 013. Public repository, AGPL-3.0 for the service, MIT for the clients
+
+**Date:** 2026-09-05
+**Decision:** The repository is public. The API, dashboard, Android app, and deployment files are licensed under AGPL-3.0-only; the SDK, MCP server, and contracts package under MIT. Releases of the Android app are GitHub releases on this repository. Security reports go to security@simhook.dev (see SECURITY.md).
+
+**Why:** The app asks for SMS permissions on people's phones, so being able to read exactly what it does is part of the offer, and release files can only be downloaded from a public repository. AGPL keeps self-hosting free while requiring anyone who runs a modified version as a service to publish their changes, which is the protection the hosted product needs. The client packages are how developers find the service, and a client library with strings attached does not get installed.
