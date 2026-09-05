@@ -33,6 +33,8 @@ cd android && ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Signed releases, the update manifest installed apps poll, and the publishing script are described in [android/RELEASING.md](android/RELEASING.md).
+
 The JavaScript packages share one pnpm workspace:
 
 ```

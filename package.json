@@ -11,6 +11,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "contracts": "pnpm --filter @simhook/contracts generate"
+    "contracts": "pnpm --filter @simhook/contracts generate",
+    "release:android": "node scripts/android-release.mjs"
   }
 }

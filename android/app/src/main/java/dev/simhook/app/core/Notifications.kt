@@ -18,9 +18,12 @@ import dev.simhook.app.ui.MainActivity
 object Notifications {
     const val CHANNEL_GATEWAY = "gateway"
     const val CHANNEL_ALERTS = "alerts"
+    const val CHANNEL_UPDATES = "updates"
     const val ID_GATEWAY = 1
     const val ID_ALERT_PAIRING = 2
     const val ID_ALERT_PERMISSION = 3
+    const val ID_UPDATE_AVAILABLE = 4
+    const val ID_UPDATE_READY = 5
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -33,6 +36,12 @@ object Notifications {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "Problems that need your attention, such as a lost pairing."
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPDATES, "App updates", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "A newer version of the app is available or ready to install."
+                setShowBadge(false)
             },
         )
     }
@@ -53,15 +62,26 @@ object Notifications {
             .setContentIntent(openApp(context))
             .build()
 
-    fun alert(context: Context, id: Int, title: String, text: String) {
+    fun alert(context: Context, id: Int, title: String, text: String) =
+        post(context, id, CHANNEL_ALERTS, title, text, openApp(context))
+
+    /** A quiet notice about an app update; tapping runs [intent]. */
+    fun update(context: Context, id: Int, title: String, text: String, intent: PendingIntent = openApp(context)) =
+        post(context, id, CHANNEL_UPDATES, title, text, intent)
+
+    fun cancel(context: Context, id: Int) {
+        runCatching { NotificationManagerCompat.from(context).cancel(id) }
+    }
+
+    private fun post(context: Context, id: Int, channel: String, title: String, text: String, intent: PendingIntent) {
         if (!canPost(context)) return
-        val n = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+        val n = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
-            .setContentIntent(openApp(context))
+            .setContentIntent(intent)
             .build()
         runCatching { NotificationManagerCompat.from(context).notify(id, n) }
     }

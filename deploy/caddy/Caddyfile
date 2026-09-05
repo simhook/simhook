@@ -29,8 +29,13 @@
 	reverse_proxy web:3000
 }
 
-# The bare domain will carry the landing page. Until then it sends people to the app.
+# The bare domain will carry the landing page. Until then it sends people to the app,
+# except for the stable download addresses the phone app and the docs rely on:
+# the files themselves live on the releases page.
 {$ROOT_DOMAIN}, www.{$ROOT_DOMAIN} {
 	import cloudflare_tls
+	redir /download/android.json {$ANDROID_RELEASES_URL}/releases/latest/download/android.json 302
+	redir /download/simhook.apk {$ANDROID_RELEASES_URL}/releases/latest/download/simhook.apk 302
+	redir /download {$ANDROID_RELEASES_URL}/releases/latest 302
 	redir https://{$APP_DOMAIN}{uri} temporary
 }

@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import dev.simhook.app.SimhookApp
+import dev.simhook.app.core.AppVisibility
 import dev.simhook.app.ui.theme.SimhookTheme
 
 /** A pairing deep link: simhook://pair?code=XXXX-XXXX&api=https://api.example.com */
@@ -44,5 +45,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         PairLink.parse(intent)?.let { pendingLink.value = it }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppVisibility.visible = true
+    }
+
+    override fun onPause() {
+        AppVisibility.visible = false
+        super.onPause()
     }
 }

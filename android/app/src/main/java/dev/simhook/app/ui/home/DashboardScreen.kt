@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -28,9 +29,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.simhook.app.BuildConfig
+import dev.simhook.app.core.AvailableUpdate
 import dev.simhook.app.push.Push
 import dev.simhook.app.sms.SimInfo
 import dev.simhook.app.ui.Permissions
+import dev.simhook.app.ui.formatBytes
 import dev.simhook.app.ui.relativeTime
 
 @Composable
@@ -41,9 +45,14 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
     val busy by vm.busy.collectAsStateWithLifecycle()
     val pushAvailable = remember { Push.available(context) }
     val sims = remember(settings.deviceId) { SimInfo.list(context) }
+    val update = settings.update?.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
 
-    // Settings changed from the dashboard should show up as soon as the app is opened.
-    LaunchedEffect(Unit) { vm.refresh() }
+    // Settings changed from the dashboard should show up as soon as the app is opened,
+    // and a newer build should be offered without waiting for the background check.
+    LaunchedEffect(Unit) {
+        vm.refresh()
+        vm.checkForUpdatesQuietly()
+    }
 
     Column(
         modifier = modifier
@@ -73,6 +82,15 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
                     TextButton(onClick = vm::refresh, enabled = !busy) { Text("Refresh") }
                 }
             }
+        }
+
+        if (update != null) {
+            UpdateCard(
+                update,
+                downloading = settings.updateDownloadId >= 0,
+                ready = settings.updateReadyUri != null,
+                onUpdate = vm::installUpdate,
+            )
         }
 
         if (!permissionsOk) {
@@ -142,6 +160,53 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
                     "Pass a SIM id as sim_subscription_id in an API call to send from that SIM.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateCard(update: AvailableUpdate, downloading: Boolean, ready: Boolean, onUpdate: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                if (update.required) "Update required" else "Update available",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(
+                "Version ${update.versionName}" + if (update.sizeBytes > 0) "  ·  ${formatBytes(update.sizeBytes)}" else "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            if (update.required) {
+                Text(
+                    "The server no longer supports this version. Sending and forwarding may stop until you update.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            update.notes?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+            if (ready && !downloading) {
+                Text(
+                    "Downloaded and verified.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Button(onClick = onUpdate, enabled = !downloading) {
+                Text(
+                    when {
+                        downloading -> "Downloading…"
+                        ready -> "Install"
+                        else -> "Download and install"
+                    },
                 )
             }
         }

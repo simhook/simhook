@@ -8,6 +8,8 @@ import dev.simhook.app.api.ApiException
 import dev.simhook.app.api.DevicePatch
 import dev.simhook.app.core.AppSettings
 import dev.simhook.app.gateway.GatewayService
+import dev.simhook.app.update.UpdateChecker
+import dev.simhook.app.update.UpdateInstaller
 import dev.simhook.app.work.HeartbeatScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,6 +60,33 @@ class GatewayViewModel(private val container: AppContainer, private val appConte
 
     fun unpair() {
         viewModelScope.launch { container.unpair() }
+    }
+
+    /** Fetches the update manifest and reports the outcome. */
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            _notice.value = UpdateChecker.check(appContext, force = true).fold(
+                onSuccess = { it?.let { u -> "Version ${u.versionName} is available." } ?: "You have the latest version." },
+                onFailure = { "Could not check for updates." },
+            )
+        }
+    }
+
+    /** Reuses a recent check; only fetches when the last one is hours old. */
+    fun checkForUpdatesQuietly() {
+        viewModelScope.launch { UpdateChecker.check(appContext, force = false) }
+    }
+
+    fun installUpdate() {
+        viewModelScope.launch {
+            val update = container.settings.current().update ?: return@launch
+            if (UpdateInstaller.install(appContext)) return@launch
+            _notice.value = if (UpdateInstaller.start(appContext, update)) {
+                "Downloading simhook ${update.versionName}"
+            } else {
+                "The update is already downloading."
+            }
+        }
     }
 
     private fun patch(p: DevicePatch) {

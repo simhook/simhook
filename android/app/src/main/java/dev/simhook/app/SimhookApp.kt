@@ -14,6 +14,7 @@ import dev.simhook.app.core.SettingsStore
 import dev.simhook.app.gateway.GatewayService
 import dev.simhook.app.outbox.AppDatabase
 import dev.simhook.app.outbox.OutboxDao
+import dev.simhook.app.update.UpdateScheduler
 import dev.simhook.app.work.HeartbeatScheduler
 import dev.simhook.app.work.notifyPairingLost
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ class SimhookApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         Notifications.createChannels(this)
+        UpdateScheduler.ensure(this)
         container.scope.launch {
             val settings = container.settings.current()
             if (settings.isPaired) {

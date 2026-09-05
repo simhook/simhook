@@ -135,3 +135,12 @@ Behind the proxy the API trusts forwarded client addresses only when `SIMHOOK_TR
 **Decision:** A newly paired phone forwards incoming SMS by default. Any change to a phone made through the dashboard or the API (settings, default phone, unpairing) sends the phone the same check-in push the presence sweep uses, so it reloads its settings within seconds instead of at its next scheduled heartbeat.
 
 **Why:** In the first production test the phone forwarded nothing because the switch defaulted to off, and the fix made in the dashboard took a heartbeat interval to arrive. Receiving is a headline feature and the user grants the SMS permission during setup, so off-by-default was only a trap. Reusing the check-in push means no new app code and no new message type.
+
+## 012. Release signing, distribution, and in-app updates
+
+**Date:** 2026-09-05
+**Decision:** One release key, generated once and kept outside the repository, signs every build; Gradle reads it from a gitignored properties file or environment variables and otherwise produces an unsigned APK, so CI can build the release variant without the key. Releases are GitHub releases tagged `android-v<version>` carrying the APK, a copy named `simhook.apk`, a checksum file, and `android.json`, a manifest with the version code, download URL, and SHA-256. `simhook.dev/download/android.json` and `/download/simhook.apk` are stable addresses that redirect to the latest release, so the hosting can move without touching installed apps.
+
+The app polls the manifest twice a day and on opening, offers a newer build on its home screen, downloads it through the system download manager, verifies the hash, and hands the file to the package installer, which enforces that the signature matches. A `min_supported_version_code` in the manifest marks builds the server no longer supports so the app can say the update is required.
+
+**Why:** Sideloaded apps get no store updates, and a gateway that nobody opens must still learn about fixes. Polling a tiny JSON file costs nothing and needs no server code; verifying the hash and letting Android check the signature means a compromised download host cannot push a foreign build. Version and manifest are produced by one script from the same Gradle values, so the APK and what it advertises cannot disagree.

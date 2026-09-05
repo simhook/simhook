@@ -35,3 +35,6 @@ Thumbs.db
 
 # Local secrets handed over out of band
 creds*.txt
+
+# Release signing (lives outside the repo; see android/RELEASING.md)
+keystore.properties

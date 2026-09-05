@@ -93,3 +93,4 @@ docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhoo
 - The dashboard bakes the API origin into its build. Changing `API_DOMAIN` means rebuilding the `web` image.
 - The API trusts forwarded client addresses only because compose sets `SIMHOOK_TRUST_PROXY=true`. Do not set that on an instance exposed without a proxy.
 - Logs: `docker compose -f docker-compose.prod.yaml logs -f api web caddy`.
+- `simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release under `ANDROID_RELEASES_URL` (default `https://github.com/simhook/releases`). The phone app polls the first address for updates; see `android/RELEASING.md`.

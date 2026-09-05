@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,6 +15,21 @@ if (file("google-services.json").exists()) {
     logger.warn("app/google-services.json not found: building without push support")
 }
 
+// Release signing. The keystore and its passwords never enter the repository:
+// android/keystore.properties (gitignored) points at them, or the four
+// SIMHOOK_KEYSTORE_* variables do on a build machine. Without either, release
+// builds come out unsigned, which is fine for CI compile checks.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signing(key: String, env: String): String? = keystoreProps.getProperty(key) ?: System.getenv(env)
+val releaseStoreFile = signing("storeFile", "SIMHOOK_KEYSTORE_FILE")
+
+// The release script and CI can pin the version without editing this file:
+//   ./gradlew assembleRelease -PversionCode=3 -PversionName=0.2.0
+fun prop(name: String): String? = (findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "dev.simhook.app"
     compileSdk = 37
@@ -23,9 +40,31 @@ android {
         // Stays at 36 on purpose: Android 17 withholds one-time-code texts from apps
         // targeting 37 for three hours unless they are the default SMS app. See docs/decisions.md 009.
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = prop("versionCode")?.toInt() ?: 2
+        versionName = prop("versionName") ?: "0.1.0"
         vectorDrawables.useSupportLibrary = true
+
+        // Where the app looks for newer builds. See docs/decisions.md 012.
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_URL",
+            "\"${prop("updateManifestUrl") ?: "https://simhook.dev/download/android.json"}\"",
+        )
+    }
+
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = signing("storePassword", "SIMHOOK_KEYSTORE_PASSWORD")
+                keyAlias = signing("keyAlias", "SIMHOOK_KEY_ALIAS")
+                keyPassword = signing("keyPassword", "SIMHOOK_KEY_PASSWORD")
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = false
+            }
+        }
     }
 
     buildTypes {
@@ -33,6 +72,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn("no release keystore configured: release builds will be unsigned")
+            }
         }
         debug {
             versionNameSuffix = "-debug"
@@ -51,6 +95,12 @@ android {
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+    }
+
+    // No opaque dependency metadata block in the APK; the build is reproducible from source.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 }
 

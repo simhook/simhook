@@ -136,7 +136,15 @@ fun SettingsScreen(vm: GatewayViewModel, modifier: Modifier = Modifier) {
                 HorizontalDivider()
                 InfoRow("Push", if (!Push.available(context)) "Not configured in this build" else if (settings.pushToken != null) "Registered" else "Not registered yet")
                 HorizontalDivider()
-                InfoRow("App version", BuildConfig.VERSION_NAME)
+                val update = settings.update?.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
+                InfoRow(
+                    "App version",
+                    when {
+                        update != null -> "${BuildConfig.VERSION_NAME}  ·  ${update.versionName} available, tap to install"
+                        else -> "${BuildConfig.VERSION_NAME}  ·  tap to check for updates"
+                    },
+                    onClick = { if (update != null) vm.installUpdate() else vm.checkForUpdates() },
+                )
             }
         }
 

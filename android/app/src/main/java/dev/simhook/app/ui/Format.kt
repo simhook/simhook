@@ -21,3 +21,10 @@ fun statusLabel(status: String): String = when (status) {
     "received" -> "Received"
     else -> status.replaceFirstChar { it.uppercase() }
 }
+
+/** "8.4 MB", "512 KB". */
+fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_048_576 -> String.format(java.util.Locale.US, "%.1f MB", bytes / 1_048_576.0)
+    bytes >= 1_024 -> "${bytes / 1_024} KB"
+    else -> "$bytes B"
+}
