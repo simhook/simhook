@@ -4,7 +4,8 @@
 # The tag's version must match the package.json version. Publishing uses npm's
 # trusted publishing (OIDC): the npm packages must list this repository and
 # this workflow file as a trusted publisher, and no token is stored anywhere.
-# Until the packages exist on npm, pushing a tag simply fails at the publish step.
+# 0.1.0 of each package was published by hand (trusted publishing needs an existing
+# package). Until the trusted publisher is set on npm, a tag fails at the publish step.
 name: Publish
 
 on:
