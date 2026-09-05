@@ -36,8 +36,8 @@ jobs:
         id: which
         run: |
           case "${GITHUB_REF_NAME}" in
-            sdk-v*) echo "dir=packages/sdk" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#sdk-v}" >> "$GITHUB_OUTPUT" ;;
-            mcp-v*) echo "dir=packages/mcp" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#mcp-v}" >> "$GITHUB_OUTPUT" ;;
+            sdk-v*) echo "dir=packages/sdk" >> "$GITHUB_OUTPUT"; echo "name=@simhook/sdk" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#sdk-v}" >> "$GITHUB_OUTPUT" ;;
+            mcp-v*) echo "dir=packages/mcp" >> "$GITHUB_OUTPUT"; echo "name=@simhook/mcp" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#mcp-v}" >> "$GITHUB_OUTPUT" ;;
             *) echo "unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
       - name: Tag matches package.json
@@ -45,7 +45,8 @@ jobs:
           actual=$(node -p "require('./${{ steps.which.outputs.dir }}/package.json').version")
           test "$actual" = "${{ steps.which.outputs.version }}" || { echo "tag says ${{ steps.which.outputs.version }}, package.json says $actual"; exit 1; }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}..." build
+      # The name form (@simhook/mcp...) builds the dependencies too; "./dir..." builds only that package.
+      - run: pnpm -r --filter "${{ steps.which.outputs.name }}..." build
       - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}" test
       # pnpm, not npm: it rewrites the workspace: version of @simhook/sdk in
       # the MCP package into the real version at publish time.
