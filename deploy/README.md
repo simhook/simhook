@@ -17,10 +17,10 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
    curl -fsSL https://get.docker.com | sh
    ```
 
-2. **Get the code** onto the host. The repository is private, so use a deploy key or a fine-grained token with read access.
+2. **Get the code** onto the host. The repository is public, so a plain clone works; a deploy key is only needed to push from the host.
 
    ```sh
-   git clone git@github.com:simhook/simhook.git /opt/simhook
+   git clone https://github.com/simhook/simhook.git /opt/simhook
    cd /opt/simhook/deploy
    ```
 
@@ -56,13 +56,14 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
 
 ## Shipping images from your machine
 
-When the server cannot reach the repository or the registry (for example while deploy keys are disabled for the organization), build here and push the images over ssh. Set `API_IMAGE=simhook/api:prod` and `WEB_IMAGE=simhook/web:prod` in `.env`, copy the `deploy` directory to the host, then:
+When the server cannot reach the repository or the registry, build here and push the images over ssh. Set `API_IMAGE=simhook/api:prod`, `WEB_IMAGE=simhook/web:prod`, and `SITE_IMAGE=simhook/site:prod` in `.env`, copy the `deploy` directory to the host, then:
 
 ```sh
 docker build -t simhook/api:prod api
 docker build -f web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=https://api.simhook.dev -t simhook/web:prod .
+docker build -f site/Dockerfile --build-arg PUBLIC_API_URL=https://api.simhook.dev --build-arg PUBLIC_APP_URL=https://app.simhook.dev -t simhook/site:prod .
 docker build -t simhook/caddy:local deploy/caddy
-docker save simhook/api:prod simhook/web:prod simhook/caddy:local | gzip -1 | ssh simhook "gunzip | docker load"
+docker save simhook/api:prod simhook/web:prod simhook/site:prod simhook/caddy:local | gzip -1 | ssh simhook "gunzip | docker load"
 ssh simhook "cd /opt/simhook/deploy && docker compose -f docker-compose.prod.yaml up -d"
 ```
 
@@ -87,7 +88,7 @@ docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-comp
 
 ## Backups
 
-The `backup` service writes a dump into `./backups` every 24 hours and keeps `BACKUP_KEEP_DAYS` of them. Copy that directory somewhere else on a schedule, for example with `rclone` to object storage. Restore with:
+The `backup` service writes a dump into `./backups` at 03:00 UTC every day and keeps `BACKUP_KEEP_DAYS` of them. A dump is complete once it has its final name; a `.tmp` file is one being written. Copy that directory somewhere else on a schedule, for example with `rclone` to object storage. Restore with:
 
 ```sh
 docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhook -d simhook --clean --if-exists < backups/simhook-YYYY-MM-DD-HHMM.dump
@@ -99,5 +100,6 @@ docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhoo
 - `ROOT_DOMAIN` is also the cookie domain: the API sets a readable signed-in flag cookie on it so the site and the dashboard know who is signed in before asking. `API_DOMAIN` and `APP_DOMAIN` must be under it, and the API refuses to start otherwise.
 - The dashboard and the site bake the API and dashboard origins into their builds. Changing `API_DOMAIN` or `APP_DOMAIN` means rebuilding the `web` and `site` images, and the published `web` and `site` images only fit simhook.dev.
 - The API trusts forwarded client addresses only because compose sets `SIMHOOK_TRUST_PROXY=true`. Do not set that on an instance exposed without a proxy.
-- Logs: `docker compose -f docker-compose.prod.yaml logs -f api web caddy`.
+- Logs: `docker compose -f docker-compose.prod.yaml logs -f api web site caddy`. Each container keeps five 20 MB files.
+- Every host answers with HSTS, `nosniff`, `frame-ancestors 'none'`, and a referrer policy; Caddy adds them, so the apps do not have to.
 - `simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release under `ANDROID_RELEASES_URL` (default `https://github.com/simhook/simhook`). The phone app polls the first address for updates; see `android/RELEASING.md`.

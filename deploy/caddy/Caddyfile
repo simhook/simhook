@@ -19,8 +19,24 @@
 	}
 }
 
+# The same protective headers on every host. Nothing here is framed by
+# anyone, nothing is sniffed, and referrers stay on our side.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+		-X-Powered-By
+	}
+}
+
 {$API_DOMAIN} {
 	import cloudflare_tls
+	import security_headers
 	encode zstd gzip
 	# The API reads the visitor's address from X-Real-IP and nothing else, so
 	# it is set here from the resolved client address and every client-sent
@@ -33,6 +49,7 @@
 
 {$APP_DOMAIN} {
 	import cloudflare_tls
+	import security_headers
 	encode zstd gzip
 	reverse_proxy web:3000
 }
@@ -41,6 +58,7 @@
 # redirects the phone app and the docs rely on; the files live on the releases page.
 {$ROOT_DOMAIN} {
 	import cloudflare_tls
+	import security_headers
 	encode zstd gzip
 	redir /download/android.json {$ANDROID_RELEASES_URL}/releases/latest/download/android.json 302
 	redir /download/simhook.apk {$ANDROID_RELEASES_URL}/releases/latest/download/simhook.apk 302

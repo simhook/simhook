@@ -1,0 +1,49 @@
+# Publishes @simhook/sdk and @simhook/mcp to npm when a package tag is pushed:
+#   sdk-v0.1.0   publishes packages/sdk at that version
+#   mcp-v0.1.0   publishes packages/mcp at that version
+# The tag's version must match the package.json version. Publishing uses npm's
+# trusted publishing (OIDC): the npm packages must list this repository and
+# this workflow file as a trusted publisher, and no token is stored anywhere.
+# Until the packages exist on npm, pushing a tag simply fails at the publish step.
+name: Publish
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+      - "mcp-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - name: Which package
+        id: which
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            sdk-v*) echo "dir=packages/sdk" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#sdk-v}" >> "$GITHUB_OUTPUT" ;;
+            mcp-v*) echo "dir=packages/mcp" >> "$GITHUB_OUTPUT"; echo "version=${GITHUB_REF_NAME#mcp-v}" >> "$GITHUB_OUTPUT" ;;
+            *) echo "unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
+      - name: Tag matches package.json
+        run: |
+          actual=$(node -p "require('./${{ steps.which.outputs.dir }}/package.json').version")
+          test "$actual" = "${{ steps.which.outputs.version }}" || { echo "tag says ${{ steps.which.outputs.version }}, package.json says $actual"; exit 1; }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}..." build
+      - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}" test
+      - name: Publish
+        working-directory: ${{ steps.which.outputs.dir }}
+        run: npm publish --provenance --access public

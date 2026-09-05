@@ -36,13 +36,19 @@ jobs:
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
+      - run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
       - run: go test ./... -count=1
         env:
           SIMHOOK_TEST_ADMIN_URL: postgres://simhook:simhook@localhost:5432/postgres?sslmode=disable
+      # The committed OpenAPI document must be the one the code produces.
+      - name: Contract drift
+        run: go run ./cmd/simhook openapi | diff - ../packages/contracts/openapi.json
 
   js:
-    name: Web, SDK, MCP
+    name: Web, site, SDK, MCP
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,12 +58,17 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The generated types must match the committed document.
+      - name: Contract drift
+        run: pnpm contracts && git diff --exit-code -- packages/contracts
       - run: pnpm -r build
         env:
           NEXT_PUBLIC_API_URL: https://api.simhook.dev
           NEXT_TELEMETRY_DISABLED: "1"
       - run: pnpm -r lint
+      - run: pnpm -r typecheck
       - run: pnpm -r test
+      - run: node --check scripts/android-release.mjs
 
   android:
     name: Android
@@ -73,4 +84,4 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
       # The release variant is unsigned here (no keystore in CI); building it still catches shrinker breakage.
-      - run: chmod +x gradlew && ./gradlew assembleDebug assembleRelease --no-daemon
+      - run: chmod +x gradlew && ./gradlew :app:lintDebug :app:testDebugUnitTest assembleDebug assembleRelease --no-daemon

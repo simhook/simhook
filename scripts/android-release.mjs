@@ -28,8 +28,9 @@ const android = path.join(root, "android");
 const win = process.platform === "win32";
 const args = parseArgs(process.argv.slice(2));
 const repo = args.repo ?? process.env.SIMHOOK_RELEASES_REPO ?? "simhook/simhook";
-const minCode = Number(args["min-code"] ?? 1);
+if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) fail(`--repo must be owner/name, got ${repo}`);
 const expectedCert = (args["cert-sha256"] ?? SIMHOOK_RELEASE_CERT_SHA256).toLowerCase();
+if (!/^[0-9a-f]{64}$/.test(expectedCert)) fail("--cert-sha256 must be 64 hex characters");
 
 // 1. Version, from the Gradle file so the APK and the manifest cannot disagree.
 const gradle = readFileSync(path.join(android, "app", "build.gradle.kts"), "utf8");
@@ -37,7 +38,13 @@ const versionCode = Number(gradle.match(/versionCode = prop\("versionCode"\)\?\.
 const versionName = gradle.match(/versionName = prop\("versionName"\) \?: "([^"]+)"/)?.[1];
 if (!versionCode || !versionName) fail("could not read versionCode/versionName from android/app/build.gradle.kts");
 const tag = `android-v${versionName}`;
-log(`version ${versionName} (code ${versionCode}), tag ${tag}, repo ${repo}`);
+// A suffixed version (0.2.0-rc1) is a pre-release: published, but not offered as latest.
+const prerelease = /-/.test(versionName);
+const minCode = args["min-code"] === undefined ? 1 : Number(args["min-code"]);
+if (!Number.isInteger(minCode) || minCode < 1 || minCode > versionCode) {
+  fail(`--min-code must be a whole number between 1 and this build's version code (${versionCode})`);
+}
+log(`version ${versionName} (code ${versionCode}), tag ${tag}, repo ${repo}${prerelease ? ", pre-release" : ""}`);
 
 // 2. Tools.
 const sdk = sdkDir();
@@ -47,6 +54,12 @@ const aapt2 = path.join(buildTools, win ? "aapt2.exe" : "aapt2");
 if (!existsSync(apksigner) || !existsSync(aapt2)) fail(`apksigner or aapt2 missing in ${buildTools}`);
 if (!existsSync(path.join(android, "keystore.properties")) && !process.env.SIMHOOK_KEYSTORE_FILE) {
   fail("no android/keystore.properties and no SIMHOOK_KEYSTORE_FILE: release builds would be unsigned");
+}
+
+if (args.publish) {
+  // Check the publishing tool before spending minutes on a build.
+  if (spawn("gh", ["--version"], { stdio: "ignore", shell: win }).status !== 0) fail("gh (the GitHub CLI) is not installed");
+  if (spawn("gh", ["auth", "status"], { stdio: "ignore", shell: win }).status !== 0) fail("gh is not signed in: run gh auth login");
 }
 
 // 3. Build.
@@ -126,7 +139,7 @@ run(
     "release", "create", tag, "-R", repo,
     "--title", `simhook for Android ${versionName}`,
     "--notes-file", notesFile,
-    "--latest",
+    ...(prerelease ? ["--prerelease", "--latest=false"] : ["--latest"]),
     apkPath, path.join(outDir, "simhook.apk"), path.join(outDir, "android.json"), path.join(outDir, "SHA256SUMS"),
   ],
   { shell: win },
@@ -137,15 +150,23 @@ log(`latest APK:      https://github.com/${repo}/releases/latest/download/simhoo
 
 // ---------------------------------------------------------------------------
 
+const FLAGS = ["publish", "skip-build", "force"];
+const VALUES = ["repo", "notes-file", "min-code", "apk-base-url", "cert-sha256"];
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith("--")) fail(`unexpected argument ${a}`);
     const key = a.slice(2);
-    const flag = ["publish", "skip-build", "force"].includes(key);
-    out[key] = flag ? true : argv[++i];
-    if (!flag && out[key] === undefined) fail(`--${key} needs a value`);
+    if (FLAGS.includes(key)) {
+      out[key] = true;
+      continue;
+    }
+    if (!VALUES.includes(key)) fail(`unknown option --${key}`);
+    const value = argv[++i];
+    if (value === undefined || value.startsWith("--")) fail(`--${key} needs a value`);
+    out[key] = value;
   }
   return out;
 }
@@ -174,8 +195,9 @@ function latestBuildTools(sdk) {
   return path.join(dir, versions[0]);
 }
 
+// cmd.exe has no escape character: a quote inside a quoted argument is written twice.
 function quoteIfShell(cmdArgs, opts) {
-  return opts.shell ? cmdArgs.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)) : cmdArgs;
+  return opts.shell ? cmdArgs.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a)) : cmdArgs;
 }
 
 function spawn(cmd, cmdArgs, opts) {

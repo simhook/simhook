@@ -1,5 +1,5 @@
-# Production stack on one host: Postgres, the API, the dashboard, Caddy for
-# TLS and routing, and a nightly database dump.
+# Production stack on one host: Postgres, the API, the dashboard, the site,
+# Caddy for TLS and routing, and a nightly database dump.
 #
 #   cp .env.example .env && cp api.env.example api.env   # then fill both in
 #   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
@@ -8,10 +8,19 @@
 # See README.md in this directory for the full runbook.
 name: simhook
 
+# Container logs rotate so a chatty week cannot fill the disk.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    <<: *logging
     environment:
       POSTGRES_USER: simhook
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -30,6 +39,7 @@ services:
       context: ../api
       dockerfile: Dockerfile
     restart: unless-stopped
+    <<: *logging
     env_file: api.env
     environment:
       SIMHOOK_ENV: production
@@ -43,6 +53,12 @@ services:
       SIMHOOK_TRUST_PROXY: "true"
     volumes:
       - ./secrets/fcm.json:/secrets/fcm.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,8 +71,16 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
     restart: unless-stopped
+    <<: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   # The site on the bare domain: static files served by a small Caddy.
   site:
@@ -68,11 +92,18 @@ services:
         PUBLIC_API_URL: https://${API_DOMAIN}
         PUBLIC_APP_URL: https://${APP_DOMAIN}
     restart: unless-stopped
+    <<: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
 
   caddy:
     build: ./caddy
     image: simhook/caddy:local
     restart: unless-stopped
+    <<: *logging
     ports:
       - "80:80"
       - "443:443"
@@ -91,15 +122,21 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - api
-      - web
-      - site
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      site:
+        condition: service_healthy
 
-  # Dumps the database once a day into ./backups and prunes old dumps.
-  # Copy that directory off the host; a backup on the same disk is not a backup.
+  # Dumps the database once a day at 03:00 UTC into ./backups and prunes old
+  # dumps. A dump is written to a temporary name and renamed when complete, so
+  # a copy taken mid-write never sees a half file. Copy that directory off the
+  # host; a backup on the same disk is not a backup.
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
+    <<: *logging
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
@@ -112,11 +149,17 @@ services:
     command:
       - |
         while true; do
-          pg_dump -h postgres -U simhook -d simhook -Fc -f "/backups/simhook-$$(date +%F-%H%M).dump" \
-            && echo "backup written" \
-            || echo "backup failed"
-          find /backups -name 'simhook-*.dump' -mtime +$${BACKUP_KEEP_DAYS} -delete
-          sleep 86400
+          now=$$(date -u +%s)
+          next=$$(date -u -d "$$(date -u +%F) 03:00:00" +%s 2>/dev/null || date -u -j -f "%Y-%m-%d %H:%M:%S" "$$(date -u +%F) 03:00:00" +%s)
+          [ "$$next" -le "$$now" ] && next=$$((next + 86400))
+          sleep $$((next - now))
+          name="/backups/simhook-$$(date -u +%F-%H%M).dump"
+          if pg_dump -h postgres -U simhook -d simhook -Fc -f "$$name.tmp"; then
+            mv "$$name.tmp" "$$name" && echo "backup written: $$name"
+          else
+            rm -f "$$name.tmp"; echo "backup failed"
+          fi
+          find /backups -name 'simhook-*.dump' -mtime +$$((BACKUP_KEEP_DAYS - 1)) -delete
         done
 
 volumes:
