@@ -13,7 +13,7 @@ func TestValidateURL(t *testing.T) {
 	lan := New(nil, &config.Config{WebhookTimeoutSeconds: 5, WebhookAllowPrivateHosts: true}, nil, nil, nil)
 
 	cases := []struct {
-		url        string
+		url         string
 		public, lan bool
 	}{
 		{"https://example.com/hooks", true, true},

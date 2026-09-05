@@ -156,6 +156,25 @@ func (s *Store) UpsertDevice(ctx context.Context, p UpsertDeviceParams) (Device,
 		p.HeartbeatIntervalMinutes, p.MakeDefault))
 }
 
+// RetireOtherPairings cuts every other live row for the same hardware, on
+// any account, off from the phone: the push registration is dropped and the
+// device tokens are revoked. A phone can only ever act for the account it is
+// paired with now.
+func (s *Store) RetireOtherPairings(ctx context.Context, hardwareKey string, keep uuid.UUID) error {
+	if _, err := s.q.Exec(ctx, `
+		update devices set
+			push_token = null, push_token_invalidated_at = now(), push_token_invalid_reason = 'paired with another account',
+			online = false
+		where hardware_key = $1 and id <> $2 and deleted_at is null`, hardwareKey, keep); err != nil {
+		return err
+	}
+	_, err := s.q.Exec(ctx, `
+		update device_tokens set revoked_at = now()
+		where revoked_at is null and device_id in (select id from devices where hardware_key = $1 and id <> $2)`,
+		hardwareKey, keep)
+	return err
+}
+
 // CountLiveDevices counts a user's paired, undeleted devices.
 func (s *Store) CountLiveDevices(ctx context.Context, userID uuid.UUID) (int, error) {
 	var n int

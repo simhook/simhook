@@ -15,6 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/simhook/simhook/internal/app"
 	"github.com/simhook/simhook/internal/mail"
 	"github.com/simhook/simhook/internal/push"
@@ -138,9 +141,25 @@ func (h *hookServer) count(event string) int {
 // ---------------------------------------------------------------------------
 
 type harness struct {
+	app    *app.App
 	srv    *httptest.Server
 	mailer *captureMailer
 	pusher *recordingPush
+}
+
+// execSQL runs one statement on the test database, for the states the API
+// only reaches with time.
+func execSQL(t *testing.T, sql string, args ...any) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, testutil.DatabaseURL(t))
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, sql, args...); err != nil {
+		t.Fatalf("sql: %v", err)
+	}
 }
 
 // startApp assembles the real service on the test database, with the mailer
@@ -171,7 +190,27 @@ func startApp(t *testing.T) *harness {
 		_ = a.Stop(stopCtx)
 		cancel()
 	})
-	return &harness{srv: srv, mailer: mailer, pusher: pusher}
+	return &harness{app: a, srv: srv, mailer: mailer, pusher: pusher}
+}
+
+// signUp registers and verifies an account and returns a signed-in client.
+func (h *harness) signUp(t *testing.T, email string) *client {
+	t.Helper()
+	c := &client{t: t, base: h.srv.URL}
+	r := c.must("POST", "/v1/auth/register", map[string]any{"email": email, "password": "hunter2hunter2"}, 201)
+	c.cookie = r.cookie
+	c.must("POST", "/v1/auth/verify-email", map[string]any{"code": h.mailer.lastCode(t)}, 200)
+	return c
+}
+
+// pairPhone mints a code on the account and pairs a phone with it.
+func (h *harness) pairPhone(t *testing.T, account *client, hardwareKey, pushToken string) (phone *client, deviceID string) {
+	t.Helper()
+	r := account.must("POST", "/v1/devices/pairing-codes", nil, 201)
+	phone = &client{t: t, base: h.srv.URL}
+	r = phone.must("POST", "/v1/device/pair", map[string]any{"code": str(r.body, "code"), "hardware_key": hardwareKey, "push_token": pushToken}, 201)
+	phone.bearer = str(r.body, "device_token")
+	return phone, str(r.body, "device", "id")
 }
 
 // ---------------------------------------------------------------------------
@@ -361,20 +400,30 @@ func TestEndToEnd(t *testing.T) {
 	}
 	waitFor(t, "device.online", func() bool { return hooks.count("device.online") == 1 })
 
-	// Send to two recipients; the dispatcher pushes both.
+	// Send to two recipients. The dispatcher wakes the phone with one push
+	// that names the phone and carries no content; the phone pulls its outbox.
 	r = dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+1 (415) 555-0123", "+14155550124", "+14155550124"}, "body": "hello"}, 202)
 	batchID := str(r.body, "batch", "id")
 	msgIDs := r.body["message_ids"].([]any)
 	if len(msgIDs) != 2 {
 		t.Fatalf("duplicates should collapse to 2 ids: %s", r.raw)
 	}
-	waitFor(t, "2 pushes", func() bool { return len(h.pusher.sends()) == 2 })
-	waitFor(t, "batch processing", func() bool {
-		b := dev.must("GET", "/v1/batches/"+batchID, nil, 200)
-		return str(b.body, "batch", "status") == "processing" && num(b.body, "batch", "dispatched_count") == 2
-	})
-	if got := h.pusher.sends()[0].Data["to"]; got != "+14155550123" {
-		t.Fatalf("push recipient: %s", got)
+	waitFor(t, "wake-up push", func() bool { return len(h.pusher.sends()) == 1 })
+	if wake := h.pusher.sends()[0]; wake.Data["device_id"] != deviceID || wake.Data["to"] != "" || wake.Data["body"] != "" {
+		t.Fatalf("the push must name the phone and carry no content: %v", wake.Data)
+	}
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	outbox := r.body["data"].([]any)
+	if len(outbox) != 2 || outbox[0].(map[string]any)["to"] != "+14155550123" || outbox[0].(map[string]any)["body"] != "hello" {
+		t.Fatalf("outbox: %s", r.raw)
+	}
+	r = dev.must("GET", "/v1/batches/"+batchID, nil, 200)
+	if str(r.body, "batch", "status") != "processing" || num(r.body, "batch", "dispatched_count") != 2 {
+		t.Fatalf("batch after the fetch: %s", r.raw)
+	}
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	if n := len(r.body["data"].([]any)); n != 2 {
+		t.Fatalf("unreported messages must be offered again, got %d", n)
 	}
 
 	// The phone reports outcomes.
@@ -398,6 +447,10 @@ func TestEndToEnd(t *testing.T) {
 	r = dev.must("GET", "/v1/stats", nil, 200)
 	if num(r.body, "sent") != 1 {
 		t.Fatalf("only the message the carrier took counts as sent: %s", r.raw)
+	}
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	if n := len(r.body["data"].([]any)); n != 0 {
+		t.Fatalf("reported messages leave the outbox, got %d", n)
 	}
 
 	// Inbound, with de-duplication by fingerprint.
@@ -483,6 +536,99 @@ func TestEndToEnd(t *testing.T) {
 
 	if hooks.badSig != 0 {
 		t.Fatalf("%d deliveries had bad signatures", hooks.badSig)
+	}
+}
+
+// TestPairingMovesThePhone: a handset paired to a second account stops
+// acting for the first, even though the first never unpaired it.
+func TestPairingMovesThePhone(t *testing.T) {
+	h := startApp(t)
+	first := h.signUp(t, "first@example.com")
+	phone, firstDevice := h.pairPhone(t, first, "hw-shared-0001", "tok-shared")
+	oldToken := phone.bearer
+
+	second := h.signUp(t, "second@example.com")
+	_, secondDevice := h.pairPhone(t, second, "hw-shared-0001", "tok-shared")
+	if secondDevice == firstDevice {
+		t.Fatal("the second account gets its own device row")
+	}
+
+	// The first account's row can no longer be woken, and its token is dead.
+	r := first.must("GET", "/v1/devices/"+firstDevice, nil, 200)
+	if r.body["device"].(map[string]any)["push_token_invalidated_at"] == nil {
+		t.Fatalf("the first pairing should have lost its push registration: %s", r.raw)
+	}
+	phone.bearer = oldToken
+	phone.must("GET", "/v1/device", nil, 401)
+}
+
+// TestStaleSweepRespectsPacing: a fetched message is only overdue once the
+// phone should have sent it, a late report resolves an overdue message, and
+// a queued message waits a day for the phone before it is given up on.
+func TestStaleSweepRespectsPacing(t *testing.T) {
+	h := startApp(t)
+	web := h.signUp(t, "sweep@example.com")
+	phone, _ := h.pairPhone(t, web, "hw-sweep-0001", "tok-sweep")
+	ctx := context.Background()
+
+	r := web.must("POST", "/v1/messages", map[string]any{"to": []string{"+14155550301", "+14155550302"}, "body": "paced"}, 202)
+	batchID := str(r.body, "batch", "id")
+	ids := r.body["message_ids"].([]any)
+	id1, id2 := uuid.MustParse(ids[0].(string)), uuid.MustParse(ids[1].(string))
+	waitFor(t, "wake-up push", func() bool { return len(h.pusher.sends()) == 1 })
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	if n := len(r.body["data"].([]any)); n != 2 {
+		t.Fatalf("outbox: %s", r.raw)
+	}
+
+	// Both were fetched an hour ago; only the first was expected to be sent by now.
+	execSQL(t, `update messages set dispatched_at = now() - interval '1 hour', expected_send_at = now() - interval '1 hour' where id = $1`, id1)
+	execSQL(t, `update messages set dispatched_at = now() - interval '1 hour', expected_send_at = now() + interval '1 hour' where id = $1`, id2)
+	if err := h.app.Gateway.Reconcile(ctx); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if r = web.must("GET", "/v1/messages/"+id1.String(), nil, 200); str(r.body, "message", "status") != "unknown" {
+		t.Fatalf("the overdue message should be unknown: %s", r.raw)
+	}
+	if r = web.must("GET", "/v1/messages/"+id2.String(), nil, 200); str(r.body, "message", "status") != "dispatched" {
+		t.Fatalf("a message the phone has not reached yet must be left alone: %s", r.raw)
+	}
+	r = web.must("GET", "/v1/batches/"+batchID, nil, 200)
+	if num(r.body, "batch", "unknown_count") != 1 || num(r.body, "batch", "dispatched_count") != 1 || str(r.body, "batch", "status") != "processing" {
+		t.Fatalf("batch after the sweep: %s", r.raw)
+	}
+
+	// The phone does send it in the end; the truth wins.
+	r = phone.must("POST", "/v1/device/messages/"+id1.String()+"/status", map[string]any{"status": "sent"}, 200)
+	if str(r.body, "message", "status") != "sent" {
+		t.Fatalf("a late report should resolve an unknown message: %s", r.raw)
+	}
+	r = web.must("GET", "/v1/batches/"+batchID, nil, 200)
+	if num(r.body, "batch", "unknown_count") != 0 || num(r.body, "batch", "sent_count") != 1 {
+		t.Fatalf("batch after the late report: %s", r.raw)
+	}
+
+	// A queued message is not given up on until a day after it was due.
+	r = web.must("POST", "/v1/messages", map[string]any{"to": []string{"+14155550303"}, "body": "waiting"}, 202)
+	waitingBatch := str(r.body, "batch", "id")
+	id3 := uuid.MustParse(r.body["message_ids"].([]any)[0].(string))
+	execSQL(t, `update messages set dispatch_due_at = now() - interval '2 hours' where id = $1`, id3)
+	if err := h.app.Gateway.Reconcile(ctx); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if r = web.must("GET", "/v1/messages/"+id3.String(), nil, 200); str(r.body, "message", "status") != "queued" {
+		t.Fatalf("two hours is not a day: %s", r.raw)
+	}
+	execSQL(t, `update messages set dispatch_due_at = now() - interval '25 hours' where id = $1`, id3)
+	if err := h.app.Gateway.Reconcile(ctx); err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	r = web.must("GET", "/v1/messages/"+id3.String(), nil, 200)
+	if str(r.body, "message", "status") != "unknown" || str(r.body, "message", "error_code") != "not_dispatched" {
+		t.Fatalf("a day later the message is given up on: %s", r.raw)
+	}
+	if r = web.must("GET", "/v1/batches/"+waitingBatch, nil, 200); str(r.body, "batch", "status") != "unknown" {
+		t.Fatalf("a batch with every message unknown is unknown: %s", r.raw)
 	}
 }
 

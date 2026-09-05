@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,11 +24,12 @@ import (
 
 // allowedFrom lists which states a report may move a message out of. Reports
 // that arrive out of order (a late "sent" after "delivered") are ignored
-// rather than moving the message backwards.
+// rather than moving the message backwards. A message the sweep gave up on
+// (unknown) is resolved by a late truthful report.
 var allowedFrom = map[string][]string{
-	store.StatusSent:      {store.StatusQueued, store.StatusDispatched},
-	store.StatusDelivered: {store.StatusQueued, store.StatusDispatched, store.StatusSent},
-	store.StatusFailed:    {store.StatusQueued, store.StatusDispatched, store.StatusSent},
+	store.StatusSent:      {store.StatusQueued, store.StatusDispatched, store.StatusUnknown},
+	store.StatusDelivered: {store.StatusQueued, store.StatusDispatched, store.StatusSent, store.StatusUnknown},
+	store.StatusFailed:    {store.StatusQueued, store.StatusDispatched, store.StatusSent, store.StatusUnknown},
 }
 
 var statusEvent = map[string]string{
@@ -85,6 +87,49 @@ func (s *Service) ReportStatus(ctx context.Context, device store.Device, message
 		return store.Message{}, err
 	}
 	return out, nil
+}
+
+// FetchOutbox hands a phone the messages it should send now, oldest first.
+// Queued ones become dispatched and count on their batches; dispatched ones
+// nobody has reported on yet come back again, so a phone that lost them can
+// recover. A disabled phone gets nothing.
+func (s *Service) FetchOutbox(ctx context.Context, device store.Device, limit int) ([]store.OutboxRow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	if !device.Enabled {
+		return []store.OutboxRow{}, nil
+	}
+	var rows []store.OutboxRow
+	err := s.st.Tx(ctx, func(_ pgx.Tx, st *store.Store) error {
+		var err error
+		rows, err = st.FetchOutbox(ctx, device.ID, time.Now(), limit)
+		if err != nil {
+			return err
+		}
+		counts := map[uuid.UUID]int{}
+		for _, r := range rows {
+			if r.PrevStatus == store.StatusQueued && r.BatchID != nil {
+				counts[*r.BatchID]++
+			}
+		}
+		for batch, n := range counts {
+			if _, err := st.ApplyBatchTransition(ctx, batch, store.StatusQueued, store.StatusDispatched, n); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if !rows[i].DueAt.Equal(rows[j].DueAt) {
+			return rows[i].DueAt.Before(rows[j].DueAt)
+		}
+		return rows[i].ID.String() < rows[j].ID.String()
+	})
+	return rows, nil
 }
 
 // InboundInput is a received SMS.
@@ -206,16 +251,19 @@ func NewReconcileWorker(svc *Service) *ReconcileWorker { return &ReconcileWorker
 
 // Work implements river.Worker.
 func (w *ReconcileWorker) Work(ctx context.Context, _ *river.Job[ReconcileArgs]) error {
-	return w.svc.reconcileStale(ctx)
+	return w.svc.Reconcile(ctx)
 }
 
-// reconcileStale moves messages nobody reported on to unknown. The flip, the
-// batch counters, and the webhook fan-out commit together so a crash in the
-// middle cannot leave counters drifted.
-func (s *Service) reconcileStale(ctx context.Context) error {
+// Reconcile moves messages nobody reported on to unknown: a queued message
+// no phone fetched in the day after it was due, or a fetched message with no
+// report within the stale window of when the phone should have sent it. The
+// flip, the batch counters, and the webhook fan-out commit together so a
+// crash in the middle cannot leave counters drifted.
+func (s *Service) Reconcile(ctx context.Context) error {
 	var count int
 	err := s.st.Tx(ctx, func(tx pgx.Tx, st *store.Store) error {
-		stale, err := st.MarkStaleUnknown(ctx, time.Now().Add(-s.cfg.StaleAfter()))
+		now := time.Now()
+		stale, err := st.MarkStaleUnknown(ctx, now.Add(-s.cfg.StaleAfter()), now.Add(-s.cfg.PushTTL()))
 		if err != nil {
 			return err
 		}

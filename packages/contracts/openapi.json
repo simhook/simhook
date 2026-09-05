@@ -1037,6 +1037,53 @@
         ],
         "type": "object"
       },
+      "OutboxOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/OutboxRow"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "OutboxRow": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "sim_subscription_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "batch_id",
+          "to",
+          "body",
+          "sim_subscription_id"
+        ],
+        "type": "object"
+      },
       "PairInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2891,6 +2938,59 @@
           }
         ],
         "summary": "Report a send outcome",
+        "tags": [
+          "device"
+        ],
+        "x-simhook-scope": "device"
+      }
+    },
+    "/v1/device/outbox": {
+      "get": {
+        "description": "The messages this phone should send now, oldest first. Fetching marks them dispatched. A message stays in the list until the phone reports its outcome, so a phone that lost one gets it again.",
+        "operationId": "device-outbox",
+        "parameters": [
+          {
+            "description": "At most this many messages. Default 100.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "At most this many messages. Default 100.",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Messages to send",
         "tags": [
           "device"
         ],

@@ -170,6 +170,11 @@ func (s *Service) Pair(ctx context.Context, in PairInput) (store.Device, string,
 		if err != nil {
 			return err
 		}
+		// The same handset paired to another account earlier must not keep
+		// acting for it.
+		if err := st.RetireOtherPairings(ctx, in.HardwareKey, device.ID); err != nil {
+			return err
+		}
 		limits, err := st.EffectiveLimits(ctx, pc.UserID)
 		if err != nil {
 			return err

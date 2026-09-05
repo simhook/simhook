@@ -113,6 +113,16 @@ type deviceMessagesInput struct {
 	Limit     int    `query:"limit" minimum:"1" maximum:"100"`
 }
 
+type outboxInput struct {
+	Limit int `query:"limit" minimum:"1" maximum:"100" doc:"At most this many messages. Default 100."`
+}
+
+type outboxOutput struct {
+	Body struct {
+		Data []store.OutboxRow `json:"data"`
+	}
+}
+
 func (s *Server) registerPhone() {
 	tags := []string{"device"}
 
@@ -214,6 +224,24 @@ func (s *Server) registerPhone() {
 			return nil, mapErr(ctx, s.deps.Log, err)
 		}
 		return &emptyOutput{}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "device-outbox", Method: http.MethodGet, Path: "/v1/device/outbox",
+		Summary: "Messages to send", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
+		Description: "The messages this phone should send now, oldest first. Fetching marks them dispatched. A message stays in the list until the phone reports its outcome, so a phone that lost one gets it again.",
+	}, func(ctx context.Context, in *outboxInput) (*outboxOutput, error) {
+		p, err := requireDevice(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := s.deps.Gateway.FetchOutbox(ctx, *p.Device, in.Limit)
+		if err != nil {
+			return nil, mapErr(ctx, s.deps.Log, err)
+		}
+		out := &outboxOutput{}
+		out.Body.Data = rows
+		return out, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

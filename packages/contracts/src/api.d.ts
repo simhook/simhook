@@ -387,6 +387,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/device/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Messages to send
+         * @description The messages this phone should send now, oldest first. Fetching marks them dispatched. A message stays in the list until the phone reports its outcome, so a phone that lost one gets it again.
+         */
+        get: operations["device-outbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device/pair": {
         parameters: {
             query?: never;
@@ -1037,6 +1057,17 @@ export interface components {
             data: components["schemas"]["Message"][];
             /** @description Pass as cursor to get the next page. Absent on the last page. */
             next_cursor?: string;
+        };
+        OutboxOutputBody: {
+            data: components["schemas"]["OutboxRow"][];
+        };
+        OutboxRow: {
+            batch_id: string;
+            body: string;
+            id: string;
+            /** Format: int32 */
+            sim_subscription_id: number | null;
+            to: string;
         };
         PairingCodeOutputBody: {
             /** @description Type this into the app, or scan pair_url as a QR code. */
@@ -2005,6 +2036,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "device-outbox": {
+        parameters: {
+            query?: {
+                /** @description At most this many messages. Default 100. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxOutputBody"];
                 };
             };
             /** @description Error */

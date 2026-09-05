@@ -179,7 +179,13 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 		}
 		for _, w := range waves {
 			waveIDs := msgIDs[w.start:w.end]
-			if err := st.StampDispatchDue(ctx, waveIDs, w.due); err != nil {
+			// The wave is released at once; the phone works through it at
+			// its pace, so each message has its own expected send time.
+			expected := make([]time.Time, len(waveIDs))
+			for i := range waveIDs {
+				expected[i] = w.due.Add(time.Duration(i) * sendDelay)
+			}
+			if err := st.StampDispatch(ctx, waveIDs, w.due, expected); err != nil {
 				return err
 			}
 			opts := &river.InsertOpts{}
@@ -243,7 +249,7 @@ func (DispatchArgs) InsertOpts() river.InsertOpts {
 	return river.InsertOpts{MaxAttempts: 3, Priority: 1}
 }
 
-// DispatchWorker pushes queued messages to the phone.
+// DispatchWorker wakes the phone for a wave of queued messages.
 type DispatchWorker struct {
 	river.WorkerDefaults[DispatchArgs]
 	svc *Service
@@ -265,12 +271,17 @@ const (
 	CodePushRejected   = "push_rejected"
 )
 
+// dispatch wakes the phone for one wave. The push carries no message
+// content, only which phone should fetch its outbox; the messages stay
+// queued until the phone does. Whatever still cannot reach a phone fails
+// here with a reason.
 func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 	rows, err := s.st.LoadQueuedForDispatch(ctx, args.MessageIDs)
 	if err != nil {
 		return err
 	}
 	if len(rows) == 0 {
+		// Already fetched by the phone, or failed.
 		return nil
 	}
 	now := time.Now()
@@ -288,67 +299,31 @@ func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 		return s.failQueued(ctx, args.BatchID, idsOf(rows), CodeNoPushToken, "The phone has no valid push registration. Open the app to reconnect it.", now)
 	}
 
-	msgs := make([]push.Message, len(rows))
-	for i, r := range rows {
-		data := map[string]string{
-			"type":       "send",
-			"message_id": r.ID.String(),
-			"batch_id":   args.BatchID.String(),
-			"to":         r.Recipient,
-			"body":       r.Body,
-		}
-		if r.SimSubscriptionID != nil {
-			data["sim_subscription_id"] = strconv.Itoa(int(*r.SimSubscriptionID))
-		}
-		msgs[i] = push.Message{Token: *device.PushToken, Data: data, TTL: s.cfg.PushTTL()}
-	}
-	results, err := s.push.Send(ctx, msgs)
+	results, err := s.push.Send(ctx, []push.Message{{
+		Token:       *device.PushToken,
+		Data:        map[string]string{"type": "send", "device_id": device.ID.String()},
+		TTL:         s.cfg.PushTTL(),
+		CollapseKey: "send",
+	}})
 	if err != nil {
 		return fmt.Errorf("gateway: push: %w", err)
 	}
-
-	var okIDs, failedIDs []uuid.UUID
-	var tokenInvalid bool
-	var firstErr string
-	for i, r := range results {
-		if r.OK {
-			okIDs = append(okIDs, rows[i].ID)
-			continue
-		}
-		failedIDs = append(failedIDs, rows[i].ID)
-		if r.TokenInvalid {
-			tokenInvalid = true
-		}
-		if firstErr == "" && r.Err != nil {
-			firstErr = r.Err.Error()
-		}
+	r := results[0]
+	if r.OK {
+		return nil
 	}
-	if len(okIDs) > 0 {
-		n, err := s.st.MarkDispatched(ctx, okIDs, now)
-		if err != nil {
-			return err
-		}
-		if _, err := s.st.ApplyBatchTransition(ctx, args.BatchID, store.StatusQueued, store.StatusDispatched, n); err != nil {
-			return err
-		}
-	}
-	// The device is marked before the messages fail, so anyone who sees a
-	// failed batch also sees why on the device.
-	if tokenInvalid {
+	if r.TokenInvalid {
+		// The device is marked before the messages fail, so anyone who sees
+		// a failed batch also sees why on the device.
 		_ = s.st.InvalidatePushToken(ctx, device.ID, "rejected by push service")
+		return s.failQueued(ctx, args.BatchID, idsOf(rows), CodePushRejected, "The phone's push registration is no longer valid. Open the app to reconnect it.", now)
 	}
-	if len(failedIDs) > 0 {
-		msg := "The push service rejected the message."
-		if tokenInvalid {
-			msg = "The phone's push registration is no longer valid. Open the app to reconnect it."
-		} else if firstErr != "" {
-			msg += " " + firstErr
-		}
-		if err := s.failQueued(ctx, args.BatchID, failedIDs, CodePushRejected, msg, now); err != nil {
-			return err
-		}
+	// A passing refusal: the job retries, and the phone fetches its outbox
+	// on its next check-in regardless.
+	if r.Err != nil {
+		return fmt.Errorf("gateway: push: %w", r.Err)
 	}
-	return nil
+	return errors.New("gateway: push refused")
 }
 
 func idsOf(rows []store.DispatchRow) []uuid.UUID {

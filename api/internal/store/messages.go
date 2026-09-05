@@ -48,6 +48,7 @@ type Message struct {
 	Recipient         *string    `db:"recipient" json:"recipient"`
 	SimSubscriptionID *int32     `db:"sim_subscription_id" json:"sim_subscription_id"`
 	DispatchDueAt     *time.Time `db:"dispatch_due_at" json:"-"`
+	ExpectedSendAt    *time.Time `db:"expected_send_at" json:"-"`
 	DispatchedAt      *time.Time `db:"dispatched_at" json:"dispatched_at"`
 	SentAt            *time.Time `db:"sent_at" json:"sent_at"`
 	DeliveredAt       *time.Time `db:"delivered_at" json:"delivered_at"`
@@ -62,7 +63,7 @@ type Message struct {
 }
 
 const messageCols = `id, user_id, device_id, batch_id, direction, status, body, recipient, sim_subscription_id,
-	dispatch_due_at, dispatched_at, sent_at, delivered_at, failed_at, error_code, error_message, sender,
+	dispatch_due_at, expected_send_at, dispatched_at, sent_at, delivered_at, failed_at, error_code, error_message, sender,
 	received_at, fingerprint, created_at, updated_at`
 
 // Message statuses.
@@ -117,40 +118,68 @@ func (s *Store) InsertOutbound(ctx context.Context, batchID, userID, deviceID uu
 	return err
 }
 
-// StampDispatchDue records when a set of messages is due to be pushed.
-func (s *Store) StampDispatchDue(ctx context.Context, ids []uuid.UUID, at time.Time) error {
-	_, err := s.q.Exec(ctx, `update messages set dispatch_due_at = $2 where id = any($1::uuid[])`, ids, at)
+// StampDispatch records when a wave of messages becomes fetchable (due) and
+// when each one is expected to have been sent, given the phone's pacing.
+// ids and expected must be the same length.
+func (s *Store) StampDispatch(ctx context.Context, ids []uuid.UUID, due time.Time, expected []time.Time) error {
+	if len(ids) != len(expected) {
+		return fmt.Errorf("store: ids and expected times differ in length")
+	}
+	_, err := s.q.Exec(ctx, `
+		update messages m set dispatch_due_at = $2, expected_send_at = v.at
+		from unnest($1::uuid[], $3::timestamptz[]) as v(id, at)
+		where m.id = v.id`, ids, due, expected)
 	return err
 }
 
 // DispatchRow is what the dispatcher needs per message.
 type DispatchRow struct {
-	ID                uuid.UUID  `db:"id"`
-	BatchID           *uuid.UUID `db:"batch_id"`
-	DeviceID          uuid.UUID  `db:"device_id"`
-	UserID            uuid.UUID  `db:"user_id"`
-	Body              string     `db:"body"`
-	Recipient         string     `db:"recipient"`
-	SimSubscriptionID *int32     `db:"sim_subscription_id"`
+	ID       uuid.UUID  `db:"id"`
+	BatchID  *uuid.UUID `db:"batch_id"`
+	DeviceID uuid.UUID  `db:"device_id"`
+	UserID   uuid.UUID  `db:"user_id"`
 }
 
 // LoadQueuedForDispatch returns the still-queued messages among ids.
 func (s *Store) LoadQueuedForDispatch(ctx context.Context, ids []uuid.UUID) ([]DispatchRow, error) {
 	return many[DispatchRow](s.q.Query(ctx, `
-		select id, batch_id, device_id, user_id, body, recipient, sim_subscription_id
+		select id, batch_id, device_id, user_id
 		from messages where id = any($1::uuid[]) and status = 'queued' and direction = 'outbound'
 		order by created_at, id`, ids))
 }
 
-// MarkDispatched moves queued messages to dispatched. Returns how many moved.
-func (s *Store) MarkDispatched(ctx context.Context, ids []uuid.UUID, at time.Time) (int, error) {
-	tag, err := s.q.Exec(ctx, `
-		update messages set status = 'dispatched', dispatched_at = $2
-		where id = any($1::uuid[]) and status = 'queued'`, ids, at)
-	if err != nil {
-		return 0, err
-	}
-	return int(tag.RowsAffected()), nil
+// OutboxRow is one message the phone should send, as the phone sees it.
+type OutboxRow struct {
+	ID                uuid.UUID  `db:"id" json:"id"`
+	BatchID           *uuid.UUID `db:"batch_id" json:"batch_id"`
+	Recipient         string     `db:"recipient" json:"to"`
+	Body              string     `db:"body" json:"body"`
+	SimSubscriptionID *int32     `db:"sim_subscription_id" json:"sim_subscription_id"`
+	DueAt             time.Time  `db:"dispatch_due_at" json:"-"`
+	PrevStatus        string     `db:"prev_status" json:"-"`
+}
+
+// FetchOutbox hands a phone its due messages. Queued ones become dispatched;
+// dispatched ones without a report yet are returned again so a phone that
+// lost them can recover. Rows are locked so two fetches cannot both count a
+// message as newly dispatched.
+func (s *Store) FetchOutbox(ctx context.Context, deviceID uuid.UUID, now time.Time, limit int) ([]OutboxRow, error) {
+	return many[OutboxRow](s.q.Query(ctx, `
+		with due as (
+			select id, status::text as prev_status from messages
+			where device_id = $1 and direction = 'outbound' and status in ('queued', 'dispatched')
+				and dispatch_due_at <= $2
+			order by dispatch_due_at, id
+			limit $3
+			for update skip locked
+		)
+		update messages m set
+			status = 'dispatched',
+			dispatched_at = coalesce(m.dispatched_at, $2)
+		from due
+		where m.id = due.id
+		returning m.id, m.batch_id, m.recipient, m.body, m.sim_subscription_id, m.dispatch_due_at, due.prev_status`,
+		deviceID, now, limit))
 }
 
 // MarkFailedFromQueued fails queued messages that could not be pushed.
@@ -198,15 +227,17 @@ type StaleMessage struct {
 	PrevStatus string     `db:"prev_status"`
 }
 
-// MarkStaleUnknown flips queued messages that were due before cutoff and
-// dispatched messages pushed before cutoff to unknown.
-func (s *Store) MarkStaleUnknown(ctx context.Context, cutoff time.Time) ([]StaleMessage, error) {
+// MarkStaleUnknown flips to unknown the queued messages that became due
+// before releaseCutoff and were never fetched, and the dispatched messages
+// that the phone fetched but did not report on within staleCutoff of when
+// it was expected to have sent them.
+func (s *Store) MarkStaleUnknown(ctx context.Context, staleCutoff, releaseCutoff time.Time) ([]StaleMessage, error) {
 	return many[StaleMessage](s.q.Query(ctx, `
 		with c as (
 			select id, status::text as prev_status from messages
 			where direction = 'outbound' and (
-				(status = 'queued' and coalesce(dispatch_due_at, created_at) < $1)
-				or (status = 'dispatched' and dispatched_at < $1)
+				(status = 'queued' and coalesce(dispatch_due_at, created_at) < $2)
+				or (status = 'dispatched' and greatest(dispatched_at, coalesce(expected_send_at, dispatched_at)) < $1)
 			)
 			limit 1000
 		)
@@ -214,10 +245,10 @@ func (s *Store) MarkStaleUnknown(ctx context.Context, cutoff time.Time) ([]Stale
 			status = 'unknown',
 			error_code = case when c.prev_status = 'queued' then 'not_dispatched' else 'no_report' end,
 			error_message = case when c.prev_status = 'queued'
-				then 'The message was never handed to the phone.'
-				else 'The phone accepted the message but never reported a result.' end
+				then 'The phone never fetched the message in the day after it was due.'
+				else 'The phone fetched the message but never reported a result.' end
 		from c where m.id = c.id
-		returning m.id, m.batch_id, m.device_id, m.user_id, c.prev_status`, cutoff))
+		returning m.id, m.batch_id, m.device_id, m.user_id, c.prev_status`, staleCutoff, releaseCutoff))
 }
 
 // ---------------------------------------------------------------------------
