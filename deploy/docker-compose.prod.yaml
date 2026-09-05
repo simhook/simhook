@@ -80,7 +80,9 @@ services:
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN in .env}
       ANDROID_RELEASES_URL: ${ANDROID_RELEASES_URL:-https://github.com/simhook/simhook}
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The directory, not the file: git replaces files by inode, and a mounted
+      # file would keep showing the old content until the container is recreated.
+      - ./caddy:/etc/caddy:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

@@ -73,6 +73,12 @@ cd /opt/simhook && git pull
 cd deploy && docker compose -f docker-compose.prod.yaml up -d --build
 ```
 
+A change to `caddy/Caddyfile` alone needs a reload, not a rebuild:
+
+```sh
+docker compose -f docker-compose.prod.yaml exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
 To use the images CI publishes instead of building on the host, log in to GitHub's registry with a token that has `read:packages`, set `API_IMAGE` and `WEB_IMAGE` in `.env`, then:
 
 ```sh
