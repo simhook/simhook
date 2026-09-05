@@ -40,7 +40,7 @@ function UsageLine({ label, used, limit }: { label: string; used: number; limit:
 
 function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="mb-10">
+    <section className="mb-12">
       <div className="mb-2 flex items-baseline justify-between gap-4">
         <h2 className="font-mono text-xs tracking-wide text-muted-foreground">{title}</h2>
         {aside}
@@ -93,7 +93,7 @@ export default function DashboardPage() {
     <>
       <PageHeader title="Overview" description={status} />
 
-      <div className="mb-10 grid grid-cols-2 gap-8 sm:grid-cols-4">
+      <div className="mb-12 grid grid-cols-2 gap-8 sm:grid-cols-4">
         <Stat label="sent" value={formatCount(stats.data?.sent)} />
         <Stat label="received" value={formatCount(stats.data?.received)} />
         <Stat label="phones" value={formatCount(stats.data?.devices)} hint={`${online.length} online, ${limits ? limitLabel(limits.device_limit) : "…"} allowed`} />

@@ -31,10 +31,12 @@ export function Bar({
   isActive?: (href: string) => boolean;
 }) {
   return (
-    <nav className="flex flex-wrap items-baseline gap-x-5 gap-y-2 border-b py-4 text-[14px]" aria-label="Main">
+    // Two rows on a phone (wordmark and account, then the words), one row from 640 px up.
+    <nav className="grid grid-cols-[1fr_auto] gap-y-2.5 border-b py-4 text-[14px] sm:flex sm:items-baseline sm:gap-x-5" aria-label="Main">
       <a href={SITE_URL} className="mr-1 font-mono text-[15px] font-medium text-foreground">
         simhook
       </a>
+      <span className="order-last col-span-2 flex flex-wrap gap-x-4 gap-y-1 sm:order-none sm:col-span-1 sm:gap-x-5">
       {links.map(({ href, label }) => {
         const active = isActive?.(href) ?? false;
         const className = cn("transition-colors", active ? "text-foreground underline underline-offset-[6px]" : "text-muted-foreground hover:text-foreground");
@@ -48,7 +50,8 @@ export function Bar({
           </a>
         );
       })}
-      {right ? <span className="ml-auto flex items-center gap-[18px] text-muted-foreground">{right}</span> : null}
+      </span>
+      {right ? <span className="flex items-center gap-[18px] justify-self-end text-muted-foreground sm:ml-auto">{right}</span> : null}
     </nav>
   );
 }

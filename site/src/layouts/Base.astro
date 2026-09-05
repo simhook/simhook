@@ -44,7 +44,7 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <div class="page">
       <nav class="top" aria-label="Main">
         <a class="wm" href="/">simhook</a>
-        {nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
+        <span class="links">{nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}</span>
         <span class="right"><a href="https://app.simhook.dev/login">Sign in</a></span>
       </nav>
       <main class:list={[`measure-${measure}`]}>

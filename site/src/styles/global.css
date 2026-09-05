@@ -46,10 +46,10 @@ a:hover { text-decoration-color: var(--fg); }
 
 /* the shell */
 .page { max-width: var(--col); margin: 0 auto; padding: 0 24px; min-height: 100vh; display: flex; flex-direction: column; }
-main { display: block; max-width: var(--measure); flex: 1; }
+main { display: block; width: 100%; max-width: var(--measure); margin: 0 auto; flex: 1; }
 main.measure-doc { --measure: 760px; }
 main.measure-form { --measure: 400px; }
-main > section { margin-top: 56px; }
+main > section { margin-top: 48px; }
 
 nav.top {
   display: flex;
@@ -58,8 +58,8 @@ nav.top {
   padding: 16px 0;
   font-size: 14px;
   border-bottom: 1px solid var(--line);
-  flex-wrap: wrap;
 }
+nav.top .links { display: flex; flex-wrap: wrap; gap: 20px; }
 nav.top a { text-decoration: none; color: var(--muted); }
 nav.top a:hover, nav.top a[aria-current="page"] { color: var(--fg); }
 nav.top .wm { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--fg); margin-right: 4px; }
@@ -89,7 +89,7 @@ p.lead { font-size: 17px; }
 .cap { font-size: 13.5px; color: var(--muted); margin: 10px 0 0; }
 .num { font-variant-numeric: tabular-nums; }
 
-.links { display: flex; gap: 22px; align-items: center; margin: 26px 0 0; flex-wrap: wrap; }
+main .links { display: flex; gap: 22px; align-items: center; margin: 24px 0 0; flex-wrap: wrap; }
 .btn {
   display: inline-block;
   background: var(--fg);
@@ -164,7 +164,7 @@ nav.docs-nav { display: flex; gap: 16px; flex-wrap: wrap; padding: 14px 0; font-
 nav.docs-nav a { text-decoration: none; color: var(--muted); }
 nav.docs-nav a:hover { color: var(--fg); }
 nav.docs-nav a[aria-current="page"] { color: var(--fg); text-decoration: underline; text-underline-offset: 6px; }
-article.doc h1 { margin-top: 36px; }
+article.doc h1 { margin-top: 40px; }
 article.doc h2 { margin: 44px 0 10px; }
 article.doc h3 { margin-top: 28px; }
 article.doc p, article.doc li { max-width: 66ch; }
@@ -193,7 +193,11 @@ article.doc img { max-width: 100%; height: auto; }
 @media (max-width: 720px) {
   .shots { grid-template-columns: 1fr; }
   .shots .phone-shot { max-width: 220px; }
-  nav.top .right { margin-left: 0; }
+  /* Two rows on a phone: wordmark and the account link, then the words. */
+  nav.top { display: grid; grid-template-columns: 1fr auto; row-gap: 10px; }
+  nav.top .wm { grid-row: 1; grid-column: 1; }
+  nav.top .right { grid-row: 1; grid-column: 2; margin-left: 0; justify-self: end; }
+  nav.top .links { grid-row: 2; grid-column: 1 / -1; gap: 16px; }
   ul.plain li { flex-direction: column; gap: 2px; }
   .idx { columns: 1; }
 }

@@ -5,7 +5,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
     <Shell>
       <Bar links={PUBLIC_LINKS} right={<span className="text-foreground">Sign in</span>} />
-      <main className="w-full max-w-[400px] flex-1 pt-12">{children}</main>
+      <main className="mx-auto w-full max-w-[400px] flex-1 pt-12">{children}</main>
       <Footer />
     </Shell>
   );
