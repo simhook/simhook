@@ -14,7 +14,6 @@ import { PageHeader } from "@/components/page-header";
 import { errorMessage } from "@/lib/api";
 import { absoluteTime, formatCount, limitLabel, priceLabel } from "@/lib/format";
 import { useAuthMutations, useMe, usePlans } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 function ProfileCard({ user }: { user: User }) {
   const { updateProfile, sendVerification } = useAuthMutations();
@@ -126,7 +125,7 @@ export default function SettingsPage() {
                 </TableHeader>
                 <TableBody>
                   {(plans.data?.data ?? []).map((p) => (
-                    <TableRow key={p.id} className={cn(p.id === limits?.plan_id && "bg-muted")}>
+                    <TableRow key={p.id}>
                       <TableCell className="font-medium">
                         {p.name}
                         {p.id === limits?.plan_id ? <Badge variant="secondary" className="ml-2">current</Badge> : null}

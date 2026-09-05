@@ -201,7 +201,7 @@ function DeliveriesTab() {
         <EmptyState title="No deliveries yet" description="Events appear here as they are sent to your endpoints." />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

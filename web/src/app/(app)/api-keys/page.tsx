@@ -172,7 +172,7 @@ export default function ApiKeysPage() {
       ) : list.length === 0 ? (
         <EmptyState title="No API keys" description="Create one to call the API from your code." action={<Button onClick={() => setCreating(true)}>Create key</Button>} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

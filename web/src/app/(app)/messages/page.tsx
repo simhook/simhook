@@ -156,7 +156,7 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -213,7 +213,7 @@ function SendsTab({ deviceNames }: { deviceNames: Map<string, string> }) {
   if (rows.length === 0) return <EmptyState title="No sends yet" description="Every API call or dashboard send shows up here with its progress." />;
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
