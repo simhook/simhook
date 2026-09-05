@@ -15,3 +15,5 @@ docs
 **/google-services.json
 **/firebase-*.json
 **/*.md
+# The site is written in Markdown; those files are content, not docs.
+!site/src/**/*.md
