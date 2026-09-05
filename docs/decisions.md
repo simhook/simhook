@@ -151,3 +151,10 @@ The app polls the manifest twice a day and on opening, offers a newer build on i
 **Decision:** The repository is public. The API, dashboard, Android app, and deployment files are licensed under AGPL-3.0-only; the SDK, MCP server, and contracts package under MIT. Releases of the Android app are GitHub releases on this repository. Security reports go to security@simhook.dev (see SECURITY.md).
 
 **Why:** The app asks for SMS permissions on people's phones, so being able to read exactly what it does is part of the offer, and release files can only be downloaded from a public repository. AGPL keeps self-hosting free while requiring anyone who runs a modified version as a service to publish their changes, which is the protection the hosted product needs. The client packages are how developers find the service, and a client library with strings attached does not get installed.
+
+## 014. One plain design for the site and the dashboard
+
+**Date:** 2026-09-05
+**Decision:** simhook.dev and app.simhook.dev share one visual system: a single column, black text on white, Instrument Sans for words and Geist Mono for anything a machine wrote, hairline rules instead of boxes, no cards, no shadows, no gradients, no illustrations, no icons in navigation. Status is a dot next to a word. Each page has at most one filled black button; every other action is a text link. The site is light only. The site is a static Astro build served by a small Caddy; the dashboard keeps its Next.js stack and carries the look in its tokens and primitives.
+
+**Why:** Three conventional directions were rendered and rejected as interchangeable with every other developer tool. The product is a plain thing: a phone, a request, a receipt. A design that shows the request, the receipt, and the real app, and otherwise stays out of the way, says that better than any hero. It is also the cheapest to keep consistent: the same five colours and two typefaces cover the site, the docs, and every dashboard page.
