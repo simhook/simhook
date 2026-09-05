@@ -53,6 +53,18 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
 
    Then open `https://app.simhook.dev`, register, verify the email, pair a phone.
 
+## Shipping images from your machine
+
+When the server cannot reach the repository or the registry (for example while deploy keys are disabled for the organization), build here and push the images over ssh. Set `API_IMAGE=simhook/api:prod` and `WEB_IMAGE=simhook/web:prod` in `.env`, copy the `deploy` directory to the host, then:
+
+```sh
+docker build -t simhook/api:prod api
+docker build -f web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=https://api.simhook.dev -t simhook/web:prod .
+docker build -t simhook/caddy:local deploy/caddy
+docker save simhook/api:prod simhook/web:prod simhook/caddy:local | gzip -1 | ssh simhook "gunzip | docker load"
+ssh simhook "cd /opt/simhook/deploy && docker compose -f docker-compose.prod.yaml up -d"
+```
+
 ## Updating
 
 ```sh

@@ -32,3 +32,6 @@ android/*.iml
 Thumbs.db
 .vscode/
 .idea/
+
+# Local secrets handed over out of band
+creds*.txt
