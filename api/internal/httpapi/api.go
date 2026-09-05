@@ -204,14 +204,20 @@ func requireDevice(ctx context.Context) (*auth.Principal, error) {
 // Plain middleware
 // ---------------------------------------------------------------------------
 
+// cors admits the dashboard and, when configured, the public site: both are
+// first-party origins that talk to the API with the session cookie.
 func cors(cfg *config.Config) func(http.Handler) http.Handler {
-	origin := ""
+	allowed := map[string]bool{}
 	if cfg != nil {
-		origin = strings.TrimRight(cfg.WebURL, "/")
+		for _, u := range []string{cfg.WebURL, cfg.SiteURL} {
+			if u = strings.TrimRight(u, "/"); u != "" {
+				allowed[u] = true
+			}
+		}
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if o := r.Header.Get("Origin"); o != "" && o == origin {
+			if o := r.Header.Get("Origin"); o != "" && allowed[o] {
 				h := w.Header()
 				h.Set("Access-Control-Allow-Origin", o)
 				h.Set("Access-Control-Allow-Credentials", "true")

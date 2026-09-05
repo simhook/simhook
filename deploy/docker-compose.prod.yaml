@@ -36,6 +36,7 @@ services:
       SIMHOOK_HTTP_ADDR: ":8080"
       SIMHOOK_PUBLIC_URL: https://${API_DOMAIN:?set API_DOMAIN in .env}
       SIMHOOK_WEB_URL: https://${APP_DOMAIN:?set APP_DOMAIN in .env}
+      SIMHOOK_SITE_URL: https://${ROOT_DOMAIN}
       SIMHOOK_DATABASE_URL: postgres://simhook:${POSTGRES_PASSWORD}@postgres:5432/simhook?sslmode=disable
       SIMHOOK_FCM_CREDENTIALS_FILE: /secrets/fcm.json
       SIMHOOK_TRUST_PROXY: "true"

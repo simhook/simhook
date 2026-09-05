@@ -13,10 +13,13 @@ import (
 
 // Config is the complete runtime configuration.
 type Config struct {
-	Env        string `env:"SIMHOOK_ENV" envDefault:"development"`
-	HTTPAddr   string `env:"SIMHOOK_HTTP_ADDR" envDefault:":8080"`
-	PublicURL  string `env:"SIMHOOK_PUBLIC_URL" envDefault:"http://localhost:8080"`
-	WebURL     string `env:"SIMHOOK_WEB_URL" envDefault:"http://localhost:3000"`
+	Env       string `env:"SIMHOOK_ENV" envDefault:"development"`
+	HTTPAddr  string `env:"SIMHOOK_HTTP_ADDR" envDefault:":8080"`
+	PublicURL string `env:"SIMHOOK_PUBLIC_URL" envDefault:"http://localhost:8080"`
+	WebURL    string `env:"SIMHOOK_WEB_URL" envDefault:"http://localhost:3000"`
+	// The public site, when it lives on another origin than the dashboard. It may
+	// ask the API who is signed in, so its origin is allowed alongside the web app.
+	SiteURL    string `env:"SIMHOOK_SITE_URL"`
 	LogLevel   string `env:"SIMHOOK_LOG_LEVEL" envDefault:"info"`
 	TrustProxy bool   `env:"SIMHOOK_TRUST_PROXY" envDefault:"false"`
 
