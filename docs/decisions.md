@@ -9,7 +9,7 @@ Short architecture decision records. Newest at the bottom. Each one says what we
 
 | Surface | Value |
 |---|---|
-| Domains | simhook.dev (primary), simhook.io (redirect, not yet registered as of 2026-09-05) |
+| Domains | simhook.dev only. No other spellings or TLDs are held; buying every variant of a name was judged pointless (2026-09-06). |
 | GitHub org | github.com/simhook |
 | Android application id | `dev.simhook.app` |
 | Kotlin package | `dev.simhook.app` |
