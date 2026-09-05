@@ -44,6 +44,8 @@
   --color-card: var(--card);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
+  --color-underline: var(--underline);
+  --color-dot-off: var(--dot-off);
   --text-sm: 0.9375rem;
   --text-sm--line-height: 1.6;
   --text-base: 0.9375rem;
@@ -75,6 +77,9 @@
   --destructive: #b91c1c;
   --ok: #15803d;
   --warn: #b45309;
+  /* The grey under a link's underline, and the dot of something that is off. */
+  --underline: #b8b8b4;
+  --dot-off: #c9c9c5;
   --border: #e6e6e3;
   --input: #e6e6e3;
   --ring: #111111;

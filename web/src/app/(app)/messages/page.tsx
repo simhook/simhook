@@ -2,7 +2,6 @@
 
 import { useDeferredValue, useState } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Send } from "lucide-react";
 import type { Message } from "@simhook/contracts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, PageHeader } from "@/components/page-header";
+import { EmptyState, LoadError, PageHeader, textLink } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { SendDialog } from "@/components/messages/send-dialog";
 import { absoluteTime, batchStatusLabel, messageStatusLabel, relativeTime, truncate } from "@/lib/format";
@@ -20,10 +18,25 @@ import { useBatches, useDevices, useMessages, type MessageFilter } from "@/lib/q
 
 function Time({ iso }: { iso: string }) {
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="whitespace-nowrap text-muted-foreground" />}>{relativeTime(iso)}</TooltipTrigger>
-      <TooltipContent>{absoluteTime(iso)}</TooltipContent>
-    </Tooltip>
+    <span className="whitespace-nowrap text-muted-foreground" title={absoluteTime(iso)}>
+      {relativeTime(iso)}
+    </span>
+  );
+}
+
+/** The cell that opens a row: a real button, so a keyboard reaches it. */
+function RowButton({ children, onClick, className = "" }: { children: React.ReactNode; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      className={`text-left underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground ${className}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -39,10 +52,10 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
                 {m.direction === "outbound" ? "Sent to" : "Received from"} <span className="font-mono">{m.direction === "outbound" ? m.recipient : m.sender}</span>
               </DialogTitle>
               <DialogDescription>
-                <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} /> {deviceName ? `· ${deviceName}` : ""}
+                <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} /> {deviceName ? `, ${deviceName}` : ""}
               </DialogDescription>
             </DialogHeader>
-            <p className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 text-sm">{m.body}</p>
+            <p className="whitespace-pre-wrap border-l-2 border-border pl-4 text-sm">{m.body}</p>
             {m.error_message ? (
               <p className="text-sm text-destructive">
                 {m.error_code ? <span className="font-mono">{m.error_code}: </span> : null}
@@ -69,7 +82,7 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
                 <div className="contents">
                   <dt className="text-muted-foreground">Send</dt>
                   <dd>
-                    <Link href={`/sends/${m.batch_id}`} className="underline underline-offset-4">
+                    <Link href={`/sends/${m.batch_id}`} className="underline decoration-underline underline-offset-4 hover:decoration-foreground">
                       View the whole send
                     </Link>
                   </dd>
@@ -103,12 +116,13 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
   };
   const messages = useMessages(filter);
   const rows = messages.data?.pages.flatMap((p) => p.data) ?? [];
+  const filtered = !!search || status !== "all" || direction !== "all" || device !== "all";
 
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-2">
         <Select value={direction} onValueChange={(v) => setDirection(v ?? "all")}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-36" aria-label="Direction">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -118,7 +132,7 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={(v) => setStatus(v ?? "all")}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40" aria-label="Status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -131,11 +145,11 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
           </SelectContent>
         </Select>
         <Select value={device} onValueChange={(v) => setDevice(v ?? "all")}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-44" aria-label="Phone">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All devices</SelectItem>
+            <SelectItem value="all">All phones</SelectItem>
             {[...deviceNames.entries()].map(([id, name]) => (
               <SelectItem key={id} value={id}>
                 {name}
@@ -143,16 +157,22 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
             ))}
           </SelectContent>
         </Select>
-        <Input placeholder="Search text or number" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
+        <Input placeholder="Search text or number" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
       </div>
 
       {messages.isPending ? (
         <Skeleton className="h-64" />
+      ) : messages.isError ? (
+        <LoadError error={messages.error} retry={() => messages.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No messages match"
-          description={search || status !== "all" || direction !== "all" ? "Try a broader filter." : "Send your first message to see it here."}
-          action={<Button onClick={onSend}>Send a message</Button>}
+          title={filtered ? "No messages match" : "No messages yet"}
+          description={filtered ? "Try a broader filter." : "Send your first message to see it here."}
+          action={
+            <button type="button" className={textLink} onClick={onSend}>
+              Send a message
+            </button>
+          }
         />
       ) : (
         <>
@@ -164,26 +184,22 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
                   <TableHead>Number</TableHead>
                   <TableHead>Message</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Device</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead className="text-right">When</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((m) => (
-                  <TableRow key={m.id} className="cursor-pointer" onClick={() => setSelected(m)}>
-                    <TableCell>
-                      {m.direction === "outbound" ? (
-                        <ArrowUpRight className="size-4 text-muted-foreground" aria-label="sent" />
-                      ) : (
-                        <ArrowDownLeft className="size-4 text-primary" aria-label="received" />
-                      )}
+                  <TableRow key={m.id} className="cursor-pointer hover:bg-secondary" onClick={() => setSelected(m)}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{m.direction === "outbound" ? "to" : "from"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <RowButton onClick={() => setSelected(m)}>{m.direction === "outbound" ? m.recipient : m.sender}</RowButton>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{m.direction === "outbound" ? m.recipient : m.sender}</TableCell>
                     <TableCell className="max-w-md truncate">{truncate(m.body, 90)}</TableCell>
                     <TableCell>
                       <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{deviceNames.get(m.device_id) ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{deviceNames.get(m.device_id) ?? ""}</TableCell>
                     <TableCell className="text-right">
                       <Time iso={m.created_at} />
                     </TableCell>
@@ -194,9 +210,9 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
           </div>
           {messages.hasNextPage ? (
             <div className="mt-3 flex justify-center">
-              <Button variant="outline" onClick={() => messages.fetchNextPage()} disabled={messages.isFetchingNextPage}>
+              <button type="button" className={textLink} onClick={() => messages.fetchNextPage()} disabled={messages.isFetchingNextPage}>
                 {messages.isFetchingNextPage ? "Loading…" : "Load more"}
-              </Button>
+              </button>
             </div>
           ) : null}
         </>
@@ -210,6 +226,7 @@ function SendsTab({ deviceNames }: { deviceNames: Map<string, string> }) {
   const batches = useBatches();
   const rows = batches.data?.pages.flatMap((p) => p.data) ?? [];
   if (batches.isPending) return <Skeleton className="h-64" />;
+  if (batches.isError) return <LoadError error={batches.error} retry={() => batches.refetch()} />;
   if (rows.length === 0) return <EmptyState title="No sends yet" description="Every API call or dashboard send shows up here with its progress." />;
   return (
     <>
@@ -221,7 +238,7 @@ function SendsTab({ deviceNames }: { deviceNames: Map<string, string> }) {
               <TableHead>Message</TableHead>
               <TableHead>Progress</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Device</TableHead>
+              <TableHead>Phone</TableHead>
               <TableHead className="text-right">When</TableHead>
             </TableRow>
           </TableHeader>
@@ -236,12 +253,12 @@ function SendsTab({ deviceNames }: { deviceNames: Map<string, string> }) {
                 </TableCell>
                 <TableCell className="max-w-xs truncate">{truncate(b.body, 60)}</TableCell>
                 <TableCell className="whitespace-nowrap text-sm tabular-nums">
-                  {b.delivered_count} delivered · {b.sent_count} sent · {b.failed_count} failed
+                  {b.delivered_count} delivered, {b.sent_count} sent, {b.failed_count} failed
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={b.status} label={batchStatusLabel[b.status] ?? b.status} />
                 </TableCell>
-                <TableCell className="text-muted-foreground">{deviceNames.get(b.device_id) ?? "—"}</TableCell>
+                <TableCell className="text-muted-foreground">{deviceNames.get(b.device_id) ?? ""}</TableCell>
                 <TableCell className="text-right">
                   <Time iso={b.created_at} />
                 </TableCell>
@@ -252,9 +269,9 @@ function SendsTab({ deviceNames }: { deviceNames: Map<string, string> }) {
       </div>
       {batches.hasNextPage ? (
         <div className="mt-3 flex justify-center">
-          <Button variant="outline" onClick={() => batches.fetchNextPage()} disabled={batches.isFetchingNextPage}>
-            Load more
-          </Button>
+          <button type="button" className={textLink} onClick={() => batches.fetchNextPage()} disabled={batches.isFetchingNextPage}>
+            {batches.isFetchingNextPage ? "Loading…" : "Load more"}
+          </button>
         </div>
       ) : null}
     </>
@@ -269,13 +286,8 @@ export default function MessagesPage() {
     <>
       <PageHeader
         title="Messages"
-        description="Everything sent and received across your devices."
-        actions={
-          <Button onClick={() => setSending(true)} className="gap-1.5">
-            <Send className="size-4" />
-            Send a message
-          </Button>
-        }
+        description="Everything sent and received across your phones."
+        actions={<Button onClick={() => setSending(true)}>Send a message</Button>}
       />
       <SendDialog open={sending} onOpenChange={setSending} />
       <Tabs defaultValue="messages">

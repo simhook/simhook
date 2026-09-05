@@ -114,7 +114,7 @@ export function SendDialog({ open, onOpenChange, initialTo = "" }: { open: boole
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Default device</SelectItem>
+                  <SelectItem value="auto">Default phone</SelectItem>
                   {enabledDevices.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
@@ -130,7 +130,7 @@ export function SendDialog({ open, onOpenChange, initialTo = "" }: { open: boole
           </div>
           {enabledDevices.length === 0 && !devices.isPending ? (
             <p className="text-sm text-destructive">
-              No enabled device.{" "}
+              No enabled phone.{" "}
               <Link href="/devices" className="underline">
                 Pair a phone
               </Link>{" "}

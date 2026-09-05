@@ -1,13 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { APIKey } from "@simhook/contracts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/field";
 import { CopyField } from "@/components/copy-button";
-import { EmptyState, PageHeader } from "@/components/page-header";
+import { EmptyState, LoadError, PageHeader, textLink } from "@/components/page-header";
 import { API_URL, errorMessage } from "@/lib/api";
 import { absoluteTime, relativeTime } from "@/lib/format";
 import { useApiKeyMutations, useApiKeys } from "@/lib/queries";
@@ -24,7 +21,7 @@ import { cn } from "@/lib/utils";
 const SCOPES = [
   { id: "send", label: "Send messages" },
   { id: "read", label: "Read messages, sends, and stats" },
-  { id: "devices", label: "Manage devices and pairing codes" },
+  { id: "devices", label: "Manage phones and pairing codes" },
   { id: "webhooks", label: "Manage webhooks" },
 ];
 
@@ -75,8 +72,8 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <DialogDescription>Copy it now. It is shown once and only its hash is stored.</DialogDescription>
             </DialogHeader>
             <CopyField value={created} secret />
-            <p className="text-sm font-medium">Try it</p>
-            <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">{`curl -X POST ${API_URL}/v1/messages \\
+            <p className="font-mono text-xs text-muted-foreground">try it</p>
+            <pre className="overflow-x-auto border bg-secondary p-3 font-mono text-xs">{`curl -X POST ${API_URL}/v1/messages \\
   -H "X-Api-Key: ${created}" \\
   -H "Content-Type: application/json" \\
   -d '{"to":["+14155550123"],"body":"Hello from simhook"}'`}</pre>
@@ -96,18 +93,26 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               </Field>
               <div className="grid gap-1.5">
                 <p className="text-sm font-medium">Permissions</p>
-                {SCOPES.map((s) => {
-                  const on = scopes.includes(s.id);
-                  return (
-                    <label key={s.id} className={cn("flex cursor-pointer items-center justify-between rounded-md border px-3 py-2 text-sm", on && "border-primary/50 bg-primary/5")}>
-                      <span>
-                        <span className="font-mono text-xs">{s.id}</span>
-                        <span className="block text-muted-foreground">{s.label}</span>
-                      </span>
-                      <Switch checked={on} onCheckedChange={(v) => setScopes((cur) => (v ? [...cur, s.id] : cur.filter((x) => x !== s.id)))} />
-                    </label>
-                  );
-                })}
+                <ul className="border-t">
+                  {SCOPES.map((s) => {
+                    const on = scopes.includes(s.id);
+                    return (
+                      <li key={s.id}>
+                        <label className="flex cursor-pointer items-center justify-between gap-4 border-b py-2 text-sm">
+                          <span>
+                            <span className="font-mono text-xs">{s.id}</span>
+                            <span className="block text-muted-foreground">{s.label}</span>
+                          </span>
+                          <Switch
+                            checked={on}
+                            onCheckedChange={(v) => setScopes((cur) => (v ? [...cur, s.id] : cur.filter((x) => x !== s.id)))}
+                            aria-label={s.label}
+                          />
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
               <Field label="Expires" htmlFor="key-expiry">
                 <Select value={expiry} onValueChange={(v) => setExpiry(v ?? "never")}>
@@ -148,18 +153,14 @@ export default function ApiKeysPage() {
   const [newName, setNewName] = useState("");
   const [confirm, setConfirm] = useState<{ key: APIKey; action: "revoke" | "delete" } | null>(null);
   const list = keys.data?.data ?? [];
+  const action = "underline decoration-underline underline-offset-4 hover:decoration-foreground";
 
   return (
     <>
       <PageHeader
         title="API keys"
         description="Send these in the X-Api-Key header. Anything a key can do, whoever holds it can do."
-        actions={
-          <Button onClick={() => setCreating(true)} className="gap-1.5">
-            <Plus className="size-4" />
-            Create key
-          </Button>
-        }
+        actions={<Button onClick={() => setCreating(true)}>Create key</Button>}
       />
       <CreateKeyDialog open={creating} onOpenChange={setCreating} />
 
@@ -169,8 +170,18 @@ export default function ApiKeysPage() {
 
       {keys.isPending ? (
         <Skeleton className="h-40" />
+      ) : keys.isError ? (
+        <LoadError error={keys.error} retry={() => keys.refetch()} />
       ) : list.length === 0 ? (
-        <EmptyState title="No API keys" description="Create one to call the API from your code." action={<Button onClick={() => setCreating(true)}>Create key</Button>} />
+        <EmptyState
+          title="No API keys"
+          description="Create one to call the API from your code."
+          action={
+            <button type="button" className={textLink} onClick={() => setCreating(true)}>
+              Create key
+            </button>
+          }
+        />
       ) : (
         <div className="overflow-x-auto">
           <Table>
@@ -181,7 +192,7 @@ export default function ApiKeysPage() {
                 <TableHead>Permissions</TableHead>
                 <TableHead>Last used</TableHead>
                 <TableHead>Expires</TableHead>
-                <TableHead className="w-10" />
+                <TableHead className="text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -189,41 +200,39 @@ export default function ApiKeysPage() {
                 <TableRow key={k.id} className={cn(k.revoked_at && "text-muted-foreground")}>
                   <TableCell className="font-medium">
                     {k.name}
-                    {k.revoked_at ? <Badge variant="outline" className="ml-2">Revoked</Badge> : null}
+                    {k.revoked_at ? <span className="ml-2 font-mono text-[11px] text-muted-foreground">revoked</span> : null}
                   </TableCell>
                   <TableCell className="font-mono text-xs">{k.prefix}…</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {k.scopes.map((s) => (
-                        <Badge key={s} variant="secondary" className="font-mono text-[11px]">
-                          {s}
-                        </Badge>
-                      ))}
-                    </div>
+                  <TableCell className="font-mono text-[11px] text-muted-foreground">{k.scopes.join(", ")}</TableCell>
+                  <TableCell className="whitespace-nowrap" title={k.last_used_at ? absoluteTime(k.last_used_at) : undefined}>
+                    {k.last_used_at ? relativeTime(k.last_used_at) : "never"}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{k.last_used_at ? relativeTime(k.last_used_at) : "never"}</TableCell>
                   <TableCell className="whitespace-nowrap">{k.expires_at ? absoluteTime(k.expires_at) : "never"}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Actions" />}>
-                        <MoreHorizontal className="size-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setRenaming(k);
-                            setNewName(k.name);
-                          }}
-                        >
-                          Rename
-                        </DropdownMenuItem>
-                        {!k.revoked_at ? <DropdownMenuItem onClick={() => setConfirm({ key: k, action: "revoke" })}>Revoke</DropdownMenuItem> : null}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setConfirm({ key: k, action: "delete" })}>
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell className="text-right text-sm">
+                    <span className="inline-flex items-baseline gap-x-2">
+                      <button
+                        type="button"
+                        className={action}
+                        onClick={() => {
+                          setRenaming(k);
+                          setNewName(k.name);
+                        }}
+                      >
+                        Rename
+                      </button>
+                      {!k.revoked_at ? (
+                        <>
+                          <span className="text-muted-foreground">·</span>
+                          <button type="button" className={action} onClick={() => setConfirm({ key: k, action: "revoke" })}>
+                            Revoke
+                          </button>
+                        </>
+                      ) : null}
+                      <span className="text-muted-foreground">·</span>
+                      <button type="button" className={`${action} text-destructive`} onClick={() => setConfirm({ key: k, action: "delete" })}>
+                        Delete
+                      </button>
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}
@@ -237,7 +246,9 @@ export default function ApiKeysPage() {
           <DialogHeader>
             <DialogTitle>Rename key</DialogTitle>
           </DialogHeader>
-          <Input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={64} />
+          <Field label="Name" htmlFor="rename">
+            <Input id="rename" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={64} />
+          </Field>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenaming(null)}>
               Cancel
@@ -258,8 +269,8 @@ export default function ApiKeysPage() {
             <DialogTitle>{confirm?.action === "revoke" ? "Revoke this key?" : "Delete this key?"}</DialogTitle>
             <DialogDescription>
               {confirm?.action === "revoke"
-                ? "It stops working immediately. Its record stays so you can see when it was last used."
-                : "It stops working immediately and its record is removed."}
+                ? "It stops working at once. Its record stays so you can see when it was last used."
+                : "It stops working at once and its record is removed."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -267,7 +278,6 @@ export default function ApiKeysPage() {
               Cancel
             </Button>
             <Button
-              variant="destructive"
               disabled={revoke.isPending || remove.isPending}
               onClick={() => {
                 if (!confirm) return;

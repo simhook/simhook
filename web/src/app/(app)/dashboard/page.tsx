@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
+import { LoadError, PageHeader } from "@/components/page-header";
+import { useAccount } from "@/components/session-provider";
 import { OnlineDot, StatusBadge } from "@/components/status-badge";
 import { formatCount, limitLabel, messageStatusLabel, relativeTime, truncate } from "@/lib/format";
-import { useAccount } from "@/components/session-provider";
 import { useApiKeys, useDevices, useMessages, useStats, useWebhooks } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+const link = "text-sm underline decoration-underline underline-offset-4 hover:decoration-foreground";
+
+function Stat({ label, value, hint }: { label: string; value: number | undefined; hint?: string }) {
   return (
     <div>
-      <p className="text-[26px] font-medium leading-none tabular-nums tracking-tight">{value}</p>
+      <p className="text-[26px] font-medium leading-none tabular-nums tracking-tight">{value === undefined ? "…" : formatCount(value)}</p>
       <p className="mt-2 font-mono text-xs text-muted-foreground">{label}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
     </div>
@@ -70,7 +72,7 @@ export default function DashboardPage() {
     { done: hookList.length > 0, label: "Add a webhook to receive events", href: "/webhooks" },
   ];
   const remaining = steps.filter((s) => !s.done).length;
-  const recentMessages = recent.data?.pages.flatMap((p) => p.data) ?? [];
+  const recentMessages = recent.data?.pages.flatMap((p) => p.data).slice(0, 8) ?? [];
 
   const status = (() => {
     if (!devices.data) return "";
@@ -92,11 +94,12 @@ export default function DashboardPage() {
       <PageHeader title="Overview" description={status} />
 
       <div className="mb-12 grid grid-cols-2 gap-8 sm:grid-cols-4">
-        <Stat label="sent" value={formatCount(stats.data?.sent)} />
-        <Stat label="received" value={formatCount(stats.data?.received)} />
-        <Stat label="phones" value={formatCount(stats.data?.devices)} hint={`${online.length} online, ${limitLabel(limits.device_limit)} allowed`} />
-        <Stat label="webhooks" value={formatCount(hookList.length)} hint={hookList.some((h) => !h.enabled) ? "one is paused" : undefined} />
+        <Stat label="sent" value={stats.data?.sent} />
+        <Stat label="received" value={stats.data?.received} />
+        <Stat label="phones" value={stats.data?.devices} hint={`${online.length} online, ${limitLabel(limits.device_limit)} allowed`} />
+        <Stat label="webhooks" value={hooks.data ? hookList.length : undefined} hint={hookList.some((h) => !h.enabled) ? "one is paused" : undefined} />
       </div>
+      {stats.isError ? <LoadError error={stats.error} retry={() => stats.refetch()} /> : null}
 
       {remaining > 0 ? (
         <Section title={`get started, ${remaining} of ${steps.length} left`}>
@@ -107,7 +110,7 @@ export default function DashboardPage() {
                   href={s.href}
                   className={cn("flex items-center gap-3 py-2.5 text-sm", s.done ? "text-muted-foreground line-through" : "hover:underline")}
                 >
-                  <span className={cn("size-[7px] rounded-full", s.done ? "bg-ok" : "bg-[#c9c9c5]")} />
+                  <span className={cn("size-[7px] rounded-full", s.done ? "bg-ok" : "bg-dot-off")} />
                   {s.label}
                 </Link>
               </li>
@@ -119,26 +122,32 @@ export default function DashboardPage() {
       <Section
         title="recent messages"
         aside={
-          <Link href="/messages" className="text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+          <Link href="/messages" className={link}>
             All messages
           </Link>
         }
       >
-        {recentMessages.length === 0 ? (
-          <p className="border-y py-6 text-sm text-muted-foreground">Nothing yet. Pair a phone and send your first message.</p>
+        {recent.isError ? (
+          <LoadError error={recent.error} retry={() => recent.refetch()} />
+        ) : recentMessages.length === 0 ? (
+          <p className="border-y py-6 text-sm text-muted-foreground">
+            {recent.isPending ? "Loading…" : "Nothing yet. Pair a phone and send your first message."}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <tbody>
                 {recentMessages.map((m) => (
                   <tr key={m.id} className="border-b">
-                    <td className="w-6 py-2.5 pr-3 font-mono text-xs text-muted-foreground">{m.direction === "outbound" ? "→" : "←"}</td>
+                    <td className="w-10 py-2.5 pr-3 font-mono text-xs text-muted-foreground">{m.direction === "outbound" ? "to" : "from"}</td>
                     <td className="py-2.5 pr-4 font-mono text-xs whitespace-nowrap">{m.direction === "outbound" ? m.recipient : m.sender}</td>
                     <td className="max-w-[360px] truncate py-2.5 pr-4 text-muted-foreground">{truncate(m.body, 80)}</td>
                     <td className="py-2.5 pr-4 whitespace-nowrap">
                       <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} />
                     </td>
-                    <td className="py-2.5 text-right font-mono text-xs whitespace-nowrap text-muted-foreground">{relativeTime(m.created_at)}</td>
+                    <td className="py-2.5 text-right font-mono text-xs whitespace-nowrap text-muted-foreground" title={new Date(m.created_at).toLocaleString()}>
+                      {relativeTime(m.created_at)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -151,17 +160,21 @@ export default function DashboardPage() {
         <Section
           title="phones"
           aside={
-            <Link href="/devices" className="text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+            <Link href="/devices" className={link}>
               Manage
             </Link>
           }
         >
-          {deviceList.length === 0 ? (
+          {devices.isError ? (
+            <LoadError error={devices.error} retry={() => devices.refetch()} />
+          ) : deviceList.length === 0 ? (
             <div className="border-y py-6 text-sm">
-              <p className="text-muted-foreground">No phone paired yet.</p>
-              <Button className="mt-3" nativeButton={false} render={<Link href="/devices" />}>
-                Pair a phone
-              </Button>
+              <p className="text-muted-foreground">{devices.isPending ? "Loading…" : "No phone paired yet."}</p>
+              {!devices.isPending ? (
+                <Button className="mt-3" nativeButton={false} render={<Link href="/devices" />}>
+                  Pair a phone
+                </Button>
+              ) : null}
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -191,7 +204,7 @@ export default function DashboardPage() {
             <UsageLine label="This month" used={usage.sent_this_month} limit={limits.monthly_limit} />
             <p className="text-xs text-muted-foreground">
               Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.{" "}
-              <Link href="/settings" className="underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+              <Link href="/settings" className="underline decoration-underline underline-offset-4 hover:decoration-foreground">
                 Plans
               </Link>
             </p>

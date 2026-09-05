@@ -5,7 +5,7 @@ const dotClass: Record<ReturnType<typeof statusTone>, string> = {
   ok: "bg-ok",
   warn: "bg-warn",
   bad: "bg-destructive",
-  muted: "bg-[#c9c9c5]",
+  muted: "bg-dot-off",
 };
 
 /** A status is a dot next to a word. */
@@ -22,7 +22,7 @@ export function StatusBadge({ status, label, className }: { status: string; labe
 export function OnlineDot({ online }: { online: boolean }) {
   return (
     <span className="inline-flex items-center gap-2 text-sm">
-      <span className={cn("size-[7px] rounded-full", online ? "bg-ok" : "bg-[#c9c9c5]")} />
+      <span className={cn("size-[7px] rounded-full", online ? "bg-ok" : "bg-dot-off")} />
       {online ? "Online" : "Offline"}
     </span>
   );

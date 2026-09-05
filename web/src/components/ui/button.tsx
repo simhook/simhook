@@ -23,11 +23,11 @@ const buttonVariants = cva(
         default: "bg-foreground text-background hover:bg-[#333333]",
         secondary: "border border-border bg-transparent text-foreground hover:bg-muted",
         outline:
-          "h-auto px-0 font-normal text-foreground underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground aria-expanded:decoration-foreground",
+          "h-auto px-0 font-normal text-foreground underline decoration-underline underline-offset-4 hover:decoration-foreground aria-expanded:decoration-foreground",
         ghost: "text-muted-foreground hover:text-foreground aria-expanded:text-foreground",
         destructive:
-          "h-auto px-0 font-normal text-destructive underline decoration-[#e3b4b4] underline-offset-4 hover:decoration-destructive",
-        link: "h-auto px-0 font-normal underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground",
+          "h-auto px-0 font-normal text-destructive underline decoration-destructive/40 underline-offset-4 hover:decoration-destructive",
+        link: "h-auto px-0 font-normal underline decoration-underline underline-offset-4 hover:decoration-foreground",
       },
     },
     defaultVariants: {

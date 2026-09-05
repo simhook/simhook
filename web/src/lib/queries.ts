@@ -16,10 +16,11 @@ export const keys = {
   stats: ["stats"] as const,
   devices: ["devices"] as const,
   device: (id: string) => ["devices", id] as const,
-  messages: (filter: MessageFilter) => ["messages", filter] as const,
+  messages: (filter: MessageFilter, limit: number) => ["messages", filter, limit] as const,
   message: (id: string) => ["messages", "one", id] as const,
-  batches: ["batches"] as const,
-  batch: (id: string) => ["batches", id] as const,
+  batches: (limit: number) => ["batches", limit] as const,
+  batch: (id: string) => ["batches", "one", id] as const,
+  pairingCode: (id: string) => ["pairing-codes", id] as const,
   webhooks: ["webhooks"] as const,
   webhook: (id: string) => ["webhooks", id] as const,
   deliveries: (filter: DeliveryFilter) => ["deliveries", filter] as const,
@@ -182,6 +183,20 @@ export function useDevice(id: string) {
   });
 }
 
+export function usePairingCodeMutation() {
+  return useMutation({ mutationFn: () => unwrap(api.POST("/v1/devices/pairing-codes")) });
+}
+
+/** Watches a pairing code until a phone uses it. */
+export function usePairingCode(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.pairingCode(id ?? ""),
+    queryFn: () => unwrap(api.GET("/v1/devices/pairing-codes/{id}", { params: { path: { id: id ?? "" } } })),
+    enabled: !!id,
+    refetchInterval: (q) => (q.state.data?.consumed ? false : 2_000),
+  });
+}
+
 export function useDeviceMutations() {
   const qc = useQueryClient();
   const refresh = () => {
@@ -189,9 +204,6 @@ export function useDeviceMutations() {
     qc.invalidateQueries({ queryKey: keys.stats });
   };
   return {
-    createPairingCode: useMutation({
-      mutationFn: () => unwrap(api.POST("/v1/devices/pairing-codes")),
-    }),
     update: useMutation({
       mutationFn: ({ id, ...body }: { id: string } & Body<"/v1/devices/{id}", "patch">) =>
         unwrap(api.PATCH("/v1/devices/{id}", { params: { path: { id } }, body })),
@@ -224,7 +236,7 @@ export type MessageFilter = {
 
 export function useMessages(filter: MessageFilter, limit = 50) {
   return useInfiniteQuery({
-    queryKey: keys.messages(filter),
+    queryKey: keys.messages(filter, limit),
     queryFn: ({ pageParam }) =>
       unwrap(
         api.GET("/v1/messages", {
@@ -253,7 +265,7 @@ export function useMessage(id: string) {
 
 export function useBatches(limit = 50) {
   return useInfiniteQuery({
-    queryKey: keys.batches,
+    queryKey: keys.batches(limit),
     queryFn: ({ pageParam }) =>
       unwrap(api.GET("/v1/batches", { params: { query: { cursor: pageParam || undefined, limit } } })),
     initialPageParam: "",
@@ -262,12 +274,17 @@ export function useBatches(limit = 50) {
   });
 }
 
-export function useBatch(id: string, live = false) {
+/** Whether a send is still moving, so its page keeps asking. */
+export function batchLive(status: string | undefined): boolean {
+  return status === undefined || status === "queued" || status === "processing";
+}
+
+export function useBatch(id: string) {
   return useQuery({
     queryKey: keys.batch(id),
     queryFn: () => unwrap(api.GET("/v1/batches/{id}", { params: { path: { id } } })),
     enabled: !!id,
-    refetchInterval: live ? 3_000 : false,
+    refetchInterval: (q) => (batchLive(q.state.data?.batch.status) ? 3_000 : false),
   });
 }
 
@@ -277,7 +294,7 @@ export function useSendMessage() {
     mutationFn: (body: Body<"/v1/messages", "post">) => unwrap(api.POST("/v1/messages", { body })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["messages"] });
-      qc.invalidateQueries({ queryKey: keys.batches });
+      qc.invalidateQueries({ queryKey: ["batches"] });
       qc.invalidateQueries({ queryKey: keys.me });
       qc.invalidateQueries({ queryKey: keys.stats });
     },

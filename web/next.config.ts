@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   // monorepo root so workspace packages are included.
   output: "standalone",
   outputFileTracingRoot: path.resolve(process.cwd(), ".."),
+  poweredByHeader: false,
 };
 
 export default nextConfig;

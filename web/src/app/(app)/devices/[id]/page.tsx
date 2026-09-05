@@ -3,10 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import type { Device } from "@simhook/contracts";
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/field";
+import { LoadError, textLink } from "@/components/page-header";
 import { OnlineDot } from "@/components/status-badge";
 import { errorMessage } from "@/lib/api";
 import { absoluteTime, formatCount, relativeTime } from "@/lib/format";
@@ -35,6 +35,8 @@ type Telemetry = {
 
 type Sim = { subscription_id: number; slot: number; carrier?: string; display_name?: string; country?: string };
 
+const INTERVALS = [15, 20, 30, 60, 120, 240];
+
 function gb(bytes?: number) {
   return bytes === undefined ? "" : `${(bytes / 1e9).toFixed(1)} GB free`;
 }
@@ -51,6 +53,8 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
   const [delay, setDelay] = useState(String(d.send_delay_seconds));
   const [interval, setInterval_] = useState(String(d.heartbeat_interval_minutes));
   const [sim, setSim] = useState(d.preferred_sim_subscription_id == null ? "default" : String(d.preferred_sim_subscription_id));
+  // A value set through the API that is not one of ours is still shown.
+  const intervals = INTERVALS.includes(d.heartbeat_interval_minutes) ? INTERVALS : [...INTERVALS, d.heartbeat_interval_minutes].sort((a, b) => a - b);
 
   const dirty =
     name.trim() !== d.name ||
@@ -73,7 +77,7 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[15, 20, 30, 60, 120, 240].map((m) => (
+              {intervals.map((m) => (
                 <SelectItem key={m} value={String(m)}>
                   Every {m} minutes
                 </SelectItem>
@@ -90,7 +94,7 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
               <SelectItem value="default">Phone default</SelectItem>
               {sims.map((s) => (
                 <SelectItem key={s.subscription_id} value={String(s.subscription_id)}>
-                  {s.display_name || s.carrier || `SIM ${s.slot + 1}`} · id {s.subscription_id}
+                  {s.display_name || s.carrier || `SIM ${s.slot + 1}`}, id {s.subscription_id}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -126,7 +130,7 @@ export default function DevicePage() {
 
   if (device.isPending) {
     return (
-      <div className="grid gap-4">
+      <div className="mt-12 grid gap-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-40" />
       </div>
@@ -134,11 +138,11 @@ export default function DevicePage() {
   }
   if (device.isError || !d) {
     return (
-      <div>
-        <p className="text-destructive">{device.error ? errorMessage(device.error) : "Device not found."}</p>
-        <Button variant="link" className="px-0" nativeButton={false} render={<Link href="/devices" />}>
-          Back to devices
-        </Button>
+      <div className="mt-12">
+        {device.isError ? <LoadError error={device.error} retry={() => device.refetch()} /> : <p className="text-sm">No such phone.</p>}
+        <Link href="/devices" className={`${textLink} mt-4 inline-block`}>
+          Back to phones
+        </Link>
       </div>
     );
   }
@@ -146,40 +150,44 @@ export default function DevicePage() {
   const telemetry = (d.telemetry ?? {}) as Telemetry;
   const sims = (Array.isArray(d.sims) ? d.sims : []) as Sim[];
   const busy = update.isPending;
+  const about = [[d.brand, d.model].filter(Boolean).join(" "), d.os_version ? `Android ${d.os_version}` : "", d.app_version_name ? `app ${d.app_version_name}` : ""].filter(Boolean);
 
   const save = (body: Omit<Parameters<typeof update.mutate>[0], "id">) =>
     update.mutate(
       { id: d.id, ...body },
       {
-        onSuccess: () => toast.success("Saved. The phone picks it up on its next check-in."),
+        onSuccess: () => toast.success("Saved. The phone is told at once."),
         onError: (e) => toast.error(errorMessage(e)),
       },
     );
 
   return (
     <>
-      <Button variant="ghost" size="sm" className="mb-3 -ml-2 gap-1 text-muted-foreground" nativeButton={false} render={<Link href="/devices" />}>
-        <ArrowLeft className="size-4" />
-        Phones
-      </Button>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <Link href="/devices" className={`${textLink} mt-8 inline-block text-muted-foreground`}>
+        Back to phones
+      </Link>
+      <div className="mb-6 mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-baseline gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
-            {d.is_default ? <Badge variant="secondary">Default</Badge> : null}
-            {!d.enabled ? <Badge variant="outline">Disabled</Badge> : null}
+            {d.is_default ? <span className="font-mono text-[11px] text-muted-foreground">default</span> : null}
+            {!d.enabled ? <span className="font-mono text-[11px] text-muted-foreground">disabled</span> : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            <OnlineDot online={d.online} /> · last check-in {relativeTime(d.last_heartbeat_at)} · {[d.brand, d.model].filter(Boolean).join(" ")}
-            {d.os_version ? ` · Android ${d.os_version}` : ""}
-            {d.app_version_name ? ` · app ${d.app_version_name}` : ""}
+            <OnlineDot online={d.online} />
+            {[`, last check-in ${relativeTime(d.last_heartbeat_at)}`, ...about.map((a) => `, ${a}`)].join("")}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-5">
           {!d.is_default ? (
-            <Button variant="outline" onClick={() => setDefault.mutate(d.id, { onSuccess: () => toast.success("This is now the default device.") })} disabled={setDefault.isPending}>
+            <button
+              type="button"
+              className={textLink}
+              onClick={() => setDefault.mutate(d.id, { onSuccess: () => toast.success("This is now the default phone."), onError: (e) => toast.error(errorMessage(e)) })}
+              disabled={setDefault.isPending}
+            >
               Make default
-            </Button>
+            </button>
           ) : null}
           <Button variant="destructive" onClick={() => setConfirmUnpair(true)}>
             Unpair
@@ -188,34 +196,32 @@ export default function DevicePage() {
       </div>
 
       {d.push_token_invalidated_at ? (
-        <Card className="mb-6 border-destructive/40 bg-destructive/5">
-          <CardContent className="py-4 text-sm">
-            <p className="font-medium">The phone cannot be reached by push.</p>
-            <p className="text-muted-foreground">{d.push_token_invalid_reason ?? "Its push registration is no longer valid."} Open the app on the phone to reconnect it.</p>
-          </CardContent>
-        </Card>
+        <Alert variant="destructive" className="mb-6">
+          <AlertTitle>The phone cannot be reached by push.</AlertTitle>
+          <AlertDescription>{d.push_token_invalid_reason ?? "Its push registration is no longer valid."} Open the app on the phone to reconnect it.</AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Settings</CardTitle>
-            <CardDescription>Switches apply immediately. The other fields save together.</CardDescription>
+            <CardTitle>settings</CardTitle>
+            <CardDescription>Switches apply at once. The other fields save together.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium">Enabled</p>
-                <p className="text-sm text-muted-foreground">When off, this phone receives no sends.</p>
+                <p className="text-sm text-muted-foreground">When off, nothing is sent from this phone; it still forwards what it receives.</p>
               </div>
-              <Switch checked={d.enabled} disabled={busy} onCheckedChange={(v) => save({ enabled: v })} />
+              <Switch checked={d.enabled} disabled={busy} onCheckedChange={(v) => save({ enabled: v })} aria-label="Enabled" />
             </div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium">Forward incoming SMS</p>
                 <p className="text-sm text-muted-foreground">Messages this phone receives are stored and sent to your webhooks.</p>
               </div>
-              <Switch checked={d.receive_enabled} disabled={busy} onCheckedChange={(v) => save({ receive_enabled: v })} />
+              <Switch checked={d.receive_enabled} disabled={busy} onCheckedChange={(v) => save({ receive_enabled: v })} aria-label="Forward incoming SMS" />
             </div>
             <SettingsFields key={d.updated_at} d={d} sims={sims} busy={busy} onSave={save} />
           </CardContent>
@@ -224,7 +230,7 @@ export default function DevicePage() {
         <div className="grid gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Activity</CardTitle>
+              <CardTitle>activity</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -241,7 +247,7 @@ export default function DevicePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Phone state</CardTitle>
+              <CardTitle>phone state</CardTitle>
               <CardDescription>From the last check-in.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-1.5 text-sm">
@@ -264,7 +270,7 @@ export default function DevicePage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>SIM cards</CardTitle>
+          <CardTitle>sim cards</CardTitle>
           <CardDescription>Pass a SIM id as sim_subscription_id in a send to use that SIM.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -285,9 +291,9 @@ export default function DevicePage() {
                 {sims.map((s) => (
                   <TableRow key={s.subscription_id}>
                     <TableCell>{s.slot + 1}</TableCell>
-                    <TableCell>{s.carrier ?? "—"}</TableCell>
-                    <TableCell>{s.display_name ?? "—"}</TableCell>
-                    <TableCell className="uppercase">{s.country ?? "—"}</TableCell>
+                    <TableCell>{s.carrier ?? ""}</TableCell>
+                    <TableCell>{s.display_name ?? ""}</TableCell>
+                    <TableCell className="uppercase">{s.country ?? ""}</TableCell>
                     <TableCell className="text-right font-mono">{s.subscription_id}</TableCell>
                   </TableRow>
                 ))}
@@ -308,12 +314,11 @@ export default function DevicePage() {
               Cancel
             </Button>
             <Button
-              variant="destructive"
               disabled={unpair.isPending}
               onClick={() =>
                 unpair.mutate(d.id, {
                   onSuccess: () => {
-                    toast.success("Device unpaired.");
+                    toast.success("Phone unpaired.");
                     router.replace("/devices");
                   },
                   onError: (e) => toast.error(errorMessage(e)),

@@ -5,12 +5,12 @@ import type { Webhook } from "@simhook/contracts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Field } from "@/components/field";
 import { CopyField } from "@/components/copy-button";
 import { errorMessage, isApiError } from "@/lib/api";
 import { useWebhookMutations } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 export const EVENTS: { id: string; label: string; description: string }[] = [
   { id: "message.received", label: "Message received", description: "An SMS arrived on a phone with forwarding on." },
@@ -18,8 +18,8 @@ export const EVENTS: { id: string; label: string; description: string }[] = [
   { id: "message.delivered", label: "Message delivered", description: "The carrier confirmed delivery." },
   { id: "message.failed", label: "Message failed", description: "Sending failed on the phone or was rejected." },
   { id: "message.unknown", label: "No result", description: "No report arrived within the wait window." },
-  { id: "device.online", label: "Device online", description: "A phone checked in after being offline." },
-  { id: "device.offline", label: "Device offline", description: "A phone stopped checking in." },
+  { id: "device.online", label: "Phone online", description: "A phone checked in after being offline." },
+  { id: "device.offline", label: "Phone offline", description: "A phone stopped checking in." },
 ];
 
 const DEFAULT_EVENTS = ["message.received", "message.sent", "message.delivered", "message.failed"];
@@ -32,7 +32,7 @@ function WebhookForm({ existing, onClose }: { existing: Webhook | null; onClose:
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [secret, setSecret] = useState<string | null>(null);
 
-  const toggle = (id: string) => setEvents((cur) => (cur.includes(id) ? cur.filter((e) => e !== id) : [...cur, id]));
+  const toggle = (id: string, on: boolean) => setEvents((cur) => (on ? [...cur.filter((e) => e !== id), id] : cur.filter((e) => e !== id)));
   const pending = create.isPending || update.isPending;
 
   const submit = () => {
@@ -75,38 +75,33 @@ function WebhookForm({ existing, onClose }: { existing: Webhook | null; onClose:
     <>
       <DialogHeader>
         <DialogTitle>{existing ? "Edit endpoint" : "Add an endpoint"}</DialogTitle>
-        <DialogDescription>We POST a JSON event to this URL and retry failures for a day.</DialogDescription>
+        <DialogDescription>We POST a JSON event to this URL and retry failures for about two days.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-4">
         <Field label="Name (optional)" htmlFor="wh-name" error={errors.name}>
           <Input id="wh-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} placeholder="Production" />
         </Field>
-        <Field label="URL" htmlFor="wh-url" error={errors.url} hint="HTTPS, reachable from the internet.">
+        <Field label="URL" htmlFor="wh-url" error={errors.url} hint="https, reachable from the internet.">
           <Input id="wh-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/hooks/simhook" className="font-mono" />
         </Field>
         <div className="grid gap-1.5">
           <p className="text-sm font-medium">Events</p>
-          <div className="grid gap-1">
+          <ul className="border-t">
             {EVENTS.map((ev) => {
               const on = events.includes(ev.id);
               return (
-                <button
-                  key={ev.id}
-                  type="button"
-                  onClick={() => toggle(ev.id)}
-                  className={cn("flex items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors", on ? "border-primary/50 bg-primary/5" : "hover:bg-muted")}
-                >
-                  <span className={cn("mt-0.5 grid size-4 shrink-0 place-items-center rounded border text-[10px]", on && "border-primary bg-primary text-primary-foreground")}>
-                    {on ? "✓" : ""}
-                  </span>
-                  <span>
-                    <span className="font-mono text-xs">{ev.id}</span>
-                    <span className="block text-muted-foreground">{ev.description}</span>
-                  </span>
-                </button>
+                <li key={ev.id}>
+                  <label className="flex cursor-pointer items-center justify-between gap-4 border-b py-2 text-sm">
+                    <span>
+                      <span className="font-mono text-xs">{ev.id}</span>
+                      <span className="block text-muted-foreground">{ev.description}</span>
+                    </span>
+                    <Switch checked={on} onCheckedChange={(v) => toggle(ev.id, v)} aria-label={ev.label} />
+                  </label>
+                </li>
               );
             })}
-          </div>
+          </ul>
           {errors.events ? <p className="text-sm text-destructive">{errors.events}</p> : null}
         </div>
         {err && Object.keys(errors).length === 0 ? <p className="text-sm text-destructive">{errorMessage(err)}</p> : null}

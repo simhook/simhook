@@ -12,6 +12,8 @@
   --ok: #15803d;
   --warn: #b45309;
   --bad: #b91c1c;
+  --underline: #b8b8b4;
+  --dot-off: #c9c9c5;
   --sans: "Instrument Sans Variable", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
   --col: 1120px;
@@ -39,7 +41,7 @@ a {
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
-  text-decoration-color: #b8b8b4;
+  text-decoration-color: var(--underline);
 }
 a:hover { text-decoration-color: var(--fg); }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
@@ -111,7 +113,7 @@ main .links { display: flex; gap: 22px; align-items: center; margin: 24px 0 0; f
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); vertical-align: 1px; margin-right: 7px; }
 .dot.warn { background: var(--warn); }
 .dot.bad { background: var(--bad); }
-.dot.off { background: #c9c9c5; }
+.dot.off { background: var(--dot-off); }
 
 /* code */
 pre, code, kbd { font-family: var(--mono); }

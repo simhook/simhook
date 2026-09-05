@@ -4,15 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { User } from "@simhook/contracts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/field";
-import { PageHeader } from "@/components/page-header";
+import { LoadError, PageHeader, textLink } from "@/components/page-header";
 import { useAccount } from "@/components/session-provider";
+import { StatusBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/api";
 import { absoluteTime, browserName, formatCount, limitLabel, priceLabel, relativeTime } from "@/lib/format";
 import { useAuthMutations, usePlans, useSessionMutations, useSessions } from "@/lib/queries";
@@ -30,19 +30,26 @@ function ProfileCard({ user }: { user: User }) {
         <Field label="Name" htmlFor="name">
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
         </Field>
-        <div className="flex items-center gap-3">
-          <Button
+        <div className="flex flex-wrap items-center gap-5">
+          <button
+            type="button"
+            className={textLink}
             disabled={updateProfile.isPending || name.trim() === (user.name ?? "")}
             onClick={() => updateProfile.mutate({ name: name.trim() }, { onSuccess: () => toast.success("Profile saved."), onError: (e) => toast.error(errorMessage(e)) })}
           >
-            Save
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Email {user.email_verified_at ? <Badge variant="secondary">verified</Badge> : <Badge variant="outline">not verified</Badge>}
+            Save name
+          </button>
+          <span className="inline-flex items-center gap-3 text-sm text-muted-foreground">
+            {user.email_verified_at ? <StatusBadge status="delivered" label="Email verified" /> : <StatusBadge status="unknown" label="Email not verified" />}
             {!user.email_verified_at ? (
-              <Button variant="link" className="h-auto p-0 pl-2" onClick={() => sendVerification.mutate(undefined, { onSuccess: () => toast.success("Code sent.") })}>
+              <button
+                type="button"
+                className={textLink}
+                disabled={sendVerification.isPending}
+                onClick={() => sendVerification.mutate(undefined, { onSuccess: () => toast.success("Code sent."), onError: (e) => toast.error(errorMessage(e)) })}
+              >
                 Send code
-              </Button>
+              </button>
             ) : null}
           </span>
         </div>
@@ -60,7 +67,7 @@ function SessionsSection() {
   const { revoke, revokeOthers } = useSessionMutations();
   const list = sessions.data?.data ?? [];
   const others = list.filter((s) => !s.current).length;
-  const link = "text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground disabled:opacity-50";
+  const link = textLink;
   return (
     <section className="lg:col-span-2">
       <div className="mb-2 flex items-baseline justify-between gap-4">
@@ -84,12 +91,7 @@ function SessionsSection() {
       {sessions.isPending ? (
         <Skeleton className="h-24" />
       ) : sessions.isError ? (
-        <p className="border-y py-6 text-sm">
-          <span className="text-destructive">{errorMessage(sessions.error)}</span>{" "}
-          <button type="button" className={link} onClick={() => sessions.refetch()}>
-            Try again
-          </button>
-        </p>
+        <LoadError error={sessions.error} retry={() => sessions.refetch()} />
       ) : (
         <Table>
           <TableHeader>
@@ -158,7 +160,7 @@ export default function SettingsPage() {
             <CardContent>
               <p className="text-sm text-muted-foreground">
                 To add one, use{" "}
-                <Link href="/reset-password" className="text-foreground underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+                <Link href="/reset-password" className="text-foreground underline decoration-underline underline-offset-4 hover:decoration-foreground">
                   Forgot password
                 </Link>{" "}
                 on the sign-in page: a code goes to your email and sets it.
@@ -221,7 +223,7 @@ export default function SettingsPage() {
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">
                         {p.name}
-                        {p.id === limits.plan_id ? <Badge variant="secondary" className="ml-2">current</Badge> : null}
+                        {p.id === limits.plan_id ? <span className="ml-2 font-mono text-[11px] text-muted-foreground">current</span> : null}
                       </TableCell>
                       <TableCell>{limitLabel(p.daily_limit)}</TableCell>
                       <TableCell>{limitLabel(p.monthly_limit)}</TableCell>

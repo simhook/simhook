@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { errorMessage } from "@/lib/api";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -21,3 +22,18 @@ export function EmptyState({ title, description, action }: { title: string; desc
     </div>
   );
 }
+
+/** A list that could not be loaded says so, in place, with a way to try again. */
+export function LoadError({ error, retry }: { error: unknown; retry: () => void }) {
+  return (
+    <p className="border-y py-6 text-sm">
+      <span className="text-destructive">{errorMessage(error)}</span>{" "}
+      <button type="button" className="underline decoration-underline underline-offset-4 hover:decoration-foreground" onClick={retry}>
+        Try again
+      </button>
+    </p>
+  );
+}
+
+/** The one text-link style every page uses for an action that is not the page's button. */
+export const textLink = "text-sm underline decoration-underline underline-offset-4 hover:decoration-foreground disabled:opacity-50";

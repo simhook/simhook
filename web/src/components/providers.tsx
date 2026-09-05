@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "@/components/session-provider";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { isApiError } from "@/lib/api";
 import { keys } from "@/lib/queries";
@@ -40,9 +39,7 @@ function getQueryClient() {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={getQueryClient()}>
-      <SessionProvider>
-        <TooltipProvider delay={300}>{children}</TooltipProvider>
-      </SessionProvider>
+      <SessionProvider>{children}</SessionProvider>
       <Toaster position="bottom-right" closeButton />
     </QueryClientProvider>
   );
