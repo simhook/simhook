@@ -5,7 +5,11 @@
 # trusted publishing (OIDC): the npm packages must list this repository and
 # this workflow file as a trusted publisher, and no token is stored anywhere.
 # 0.1.0 of each package was published by hand (trusted publishing needs an existing
-# package). Until the trusted publisher is set on npm, a tag fails at the publish step.
+# package). On npm, the trusted publisher of each package must name this repository
+# and this file and allow the "npm publish" action: the default since 2026-09-03 is
+# staging only, which fails a direct publish with "OIDC permission denied".
+# To release: bump "version" in package.json and src/version.ts of the package,
+# commit, then push the tag.
 name: Publish
 
 on:
