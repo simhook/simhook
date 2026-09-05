@@ -74,9 +74,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [me.isError, me.error, router, pathname]);
 
   if (me.isPending || (me.isError && isApiError(me.error) && me.error.isUnauthenticated)) {
+    // The frame paints at once; only the words wait for the account to arrive.
     return (
       <Shell>
-        <div className="py-10 text-sm text-muted-foreground">Loading…</div>
+        <AppBar />
+        <main className="flex-1" aria-busy="true">
+          <div className="mt-12 grid gap-3">
+            <div className="h-6 w-40 bg-muted" />
+            <div className="h-4 w-80 max-w-full bg-muted" />
+          </div>
+        </main>
+        <Footer />
       </Shell>
     );
   }

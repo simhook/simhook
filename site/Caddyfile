@@ -14,8 +14,9 @@
 		file_server
 	}
 
-	# Hashed assets never change; everything else can be re-checked often.
+	# Hashed assets never change. Pages are revalidated on every visit (a 304
+	# costs nothing), so a deploy is visible the moment it lands.
 	header /_astro/* Cache-Control "public, max-age=31536000, immutable"
 	header /img/* Cache-Control "public, max-age=86400"
-	header Cache-Control "public, max-age=300"
+	header Cache-Control "no-cache"
 }
