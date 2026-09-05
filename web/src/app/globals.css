@@ -116,3 +116,8 @@
     text-underline-offset: 3px;
   }
 }
+
+/* A toast is words; the library's icons stay out. */
+[data-sonner-toaster] [data-sonner-toast] [data-icon] {
+  display: none;
+}

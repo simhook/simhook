@@ -524,7 +524,7 @@ type sessionTokenKey struct{}
 func (s *Server) issueSession(ctx context.Context, u store.User) (*sessionOutput, error) {
 	ua, _ := ctx.Value(userAgentKey{}).(string)
 	ip, _ := ctx.Value(remoteAddrKey{}).(string)
-	token, expires, err := s.deps.Auth.CreateSession(ctx, u.ID, ua, ip)
+	token, expires, err := s.deps.Auth.CreateSession(ctx, u.ID, ua, hostOf(ip))
 	if err != nil {
 		return nil, mapErr(ctx, s.deps.Log, err)
 	}

@@ -115,7 +115,7 @@ function CreateKeyDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 </ul>
               </div>
               <Field label="Expires" htmlFor="key-expiry">
-                <Select value={expiry} onValueChange={(v) => setExpiry(v ?? "never")}>
+                <Select value={expiry} onValueChange={(v) => setExpiry(v ?? "never")} items={Object.fromEntries(EXPIRY.map((e) => [e.id, e.label]))}>
                   <SelectTrigger id="key-expiry">
                     <SelectValue />
                   </SelectTrigger>

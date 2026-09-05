@@ -109,7 +109,11 @@ export function SendDialog({ open, onOpenChange, initialTo = "" }: { open: boole
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Send from" htmlFor="device">
-              <Select value={device} onValueChange={(v) => setDevice(v ?? "auto")}>
+              <Select
+                value={device}
+                onValueChange={(v) => setDevice(v ?? "auto")}
+                items={{ auto: "Default phone", ...Object.fromEntries(enabledDevices.map((d) => [d.id, d.name + (d.online ? "" : " (offline)")])) }}
+              >
                 <SelectTrigger id="device">
                   <SelectValue />
                 </SelectTrigger>

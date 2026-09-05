@@ -120,7 +120,7 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, auth.ErrBanned):
 		return apiErr(http.StatusForbidden, "account_suspended", err.Error())
-	case errors.Is(err, auth.ErrInvalidCredentials):
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrWrongPassword):
 		return apiErr(http.StatusUnauthorized, "invalid_credentials", err.Error())
 	case errors.Is(err, auth.ErrTooManyAttempts):
 		return apiErr(http.StatusTooManyRequests, "rate_limited", err.Error())

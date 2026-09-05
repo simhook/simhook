@@ -29,6 +29,7 @@ import (
 var (
 	ErrEmailTaken         = errors.New("an account with this email already exists")
 	ErrInvalidCredentials = errors.New("wrong email or password")
+	ErrWrongPassword      = errors.New("the current password is wrong")
 	ErrTooManyAttempts    = errors.New("too many sign-in attempts for this account; wait a minute and try again")
 	ErrInvalidCode        = errors.New("the code is wrong or has expired")
 	ErrUnauthenticated    = errors.New("authentication required")
@@ -334,8 +335,11 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 // making the change is signed out: whoever else held the old password is
 // no longer welcome.
 func (s *Service) ChangePassword(ctx context.Context, u store.User, current, next string, keep uuid.UUID) error {
-	if u.PasswordHash == nil || !secrets.VerifyPassword(*u.PasswordHash, current) {
-		return ErrInvalidCredentials
+	if u.PasswordHash == nil {
+		return ErrNoPassword
+	}
+	if !secrets.VerifyPassword(*u.PasswordHash, current) {
+		return ErrWrongPassword
 	}
 	if err := checkPassword(next); err != nil {
 		return err

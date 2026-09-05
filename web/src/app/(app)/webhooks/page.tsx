@@ -158,7 +158,7 @@ function DeliveriesTab() {
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-2">
-        <Select value={webhook} onValueChange={(v) => setWebhook(v ?? "all")}>
+        <Select value={webhook} onValueChange={(v) => setWebhook(v ?? "all")} items={{ all: "All endpoints", ...Object.fromEntries(names) }}>
           <SelectTrigger className="w-48" aria-label="Endpoint">
             <SelectValue />
           </SelectTrigger>
@@ -171,7 +171,7 @@ function DeliveriesTab() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={status} onValueChange={(v) => setStatus(v ?? "all")}>
+        <Select value={status} onValueChange={(v) => setStatus(v ?? "all")} items={{ all: "Any status", ...deliveryStatusLabel }}>
           <SelectTrigger className="w-36" aria-label="Status">
             <SelectValue />
           </SelectTrigger>
@@ -184,7 +184,7 @@ function DeliveriesTab() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={event} onValueChange={(v) => setEvent(v ?? "all")}>
+        <Select value={event} onValueChange={(v) => setEvent(v ?? "all")} items={{ all: "Any event", ...Object.fromEntries([...EVENTS.map((e) => e.id), "ping"].map((e) => [e, e])) }}>
           <SelectTrigger className="w-48" aria-label="Event">
             <SelectValue />
           </SelectTrigger>

@@ -100,6 +100,8 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
   );
 }
 
+const DIRECTIONS = { all: "All directions", outbound: "Sent", inbound: "Received" };
+
 function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>; onSend: () => void }) {
   const [direction, setDirection] = useState("all");
   const [status, setStatus] = useState("all");
@@ -121,7 +123,7 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-2">
-        <Select value={direction} onValueChange={(v) => setDirection(v ?? "all")}>
+        <Select value={direction} onValueChange={(v) => setDirection(v ?? "all")} items={DIRECTIONS}>
           <SelectTrigger className="w-36" aria-label="Direction">
             <SelectValue />
           </SelectTrigger>
@@ -131,7 +133,7 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
             <SelectItem value="inbound">Received</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={status} onValueChange={(v) => setStatus(v ?? "all")}>
+        <Select value={status} onValueChange={(v) => setStatus(v ?? "all")} items={{ all: "Any status", ...messageStatusLabel }}>
           <SelectTrigger className="w-40" aria-label="Status">
             <SelectValue />
           </SelectTrigger>
@@ -144,7 +146,7 @@ function MessagesTab({ deviceNames, onSend }: { deviceNames: Map<string, string>
             ))}
           </SelectContent>
         </Select>
-        <Select value={device} onValueChange={(v) => setDevice(v ?? "all")}>
+        <Select value={device} onValueChange={(v) => setDevice(v ?? "all")} items={{ all: "All phones", ...Object.fromEntries(deviceNames) }}>
           <SelectTrigger className="w-44" aria-label="Phone">
             <SelectValue />
           </SelectTrigger>

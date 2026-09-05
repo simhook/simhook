@@ -72,7 +72,7 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
           <Input id="delay" type="number" min={0} max={3600} value={delay} onChange={(e) => setDelay(e.target.value)} />
         </Field>
         <Field label="Check-in interval" htmlFor="interval">
-          <Select value={interval} onValueChange={(v) => setInterval_(v ?? "20")}>
+          <Select value={interval} onValueChange={(v) => setInterval_(v ?? "20")} items={Object.fromEntries(intervals.map((m) => [String(m), `Every ${m} minutes`]))}>
             <SelectTrigger id="interval">
               <SelectValue />
             </SelectTrigger>
@@ -86,7 +86,11 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
           </Select>
         </Field>
         <Field label="Preferred SIM" htmlFor="sim" hint="Used when a send does not name a SIM.">
-          <Select value={sim} onValueChange={(v) => setSim(v ?? "default")}>
+          <Select
+            value={sim}
+            onValueChange={(v) => setSim(v ?? "default")}
+            items={{ default: "Phone default", ...Object.fromEntries(sims.map((s) => [String(s.subscription_id), `${s.display_name || s.carrier || `SIM ${s.slot + 1}`}, id ${s.subscription_id}`])) }}
+          >
             <SelectTrigger id="sim">
               <SelectValue />
             </SelectTrigger>

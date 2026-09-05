@@ -51,7 +51,7 @@ export function Bar({
         );
       })}
       </span>
-      {right ? <span className="flex items-center gap-[18px] justify-self-end text-muted-foreground sm:ml-auto">{right}</span> : null}
+      {right ? <span className="flex items-center gap-[18px] justify-self-end whitespace-nowrap text-muted-foreground sm:ml-auto">{right}</span> : null}
     </nav>
   );
 }
