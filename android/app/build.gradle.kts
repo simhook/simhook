@@ -7,12 +7,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-// Push needs a Firebase config file that lives outside version control. The
-// app builds and runs without it; only pushes are unavailable until it exists.
-if (file("google-services.json").exists()) {
+// Push needs a Firebase config file that lives outside version control:
+// src/debug/google-services.json for the development project and
+// src/release/google-services.json for the production one, so a debug build
+// can never reach production phones. The app builds and runs without them;
+// only pushes are unavailable until they exist.
+val googleServicesFiles = listOf("google-services.json", "src/debug/google-services.json", "src/release/google-services.json").map(::file)
+if (googleServicesFiles.any { it.exists() }) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
 } else {
-    logger.warn("app/google-services.json not found: building without push support")
+    logger.warn("no google-services.json found: building without push support")
 }
 
 // Release signing. The keystore and its passwords never enter the repository:
@@ -40,8 +44,8 @@ android {
         // Stays at 36 on purpose: Android 17 withholds one-time-code texts from apps
         // targeting 37 for three hours unless they are the default SMS app. See docs/decisions.md 009.
         targetSdk = 36
-        versionCode = prop("versionCode")?.toInt() ?: 2
-        versionName = prop("versionName") ?: "0.1.0"
+        versionCode = prop("versionCode")?.toInt() ?: 3
+        versionName = prop("versionName") ?: "0.1.1"
         vectorDrawables.useSupportLibrary = true
 
         // Where the app looks for newer builds. See docs/decisions.md 012.

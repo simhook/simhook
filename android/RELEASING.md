@@ -19,6 +19,10 @@ On a build machine without that file, the same four values can come from `SIMHOO
 
 Keep the keystore and its passwords backed up somewhere that is not the development machine. The release script refuses to publish an APK signed by any other key; its fingerprint is pinned at the top of `scripts/android-release.mjs`.
 
+## Push configuration
+
+Firebase has two projects: `simhook-dev` for development and `simhook-prod` for production. Their config files live outside the repository at `android/app/src/debug/google-services.json` and `android/app/src/release/google-services.json`, so a debug build can only ever reach the development server's phones and a release build only production's. A machine without either file still builds; its APKs just cannot be woken by push. The server side of each project is its service account: `api/firebase-service-account.json` locally, `deploy/secrets/fcm.json` on the production host.
+
 ## Version numbers
 
 Both live in `android/app/build.gradle.kts`:

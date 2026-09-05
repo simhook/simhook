@@ -35,7 +35,7 @@ The app itself does not need to change. A pairing link or QR code carries the AP
 Two things are built into the app and worth knowing:
 
 - **Updates.** The app polls `https://simhook.dev/download/android.json` for new releases, which is fine for most self-hosters: you get the same signed builds. To serve your own builds instead, build the app with `-PupdateManifestUrl=https://your-domain/…` and your own signing key; [android/RELEASING.md](https://github.com/simhook/simhook/blob/main/android/RELEASING.md) covers the release process.
-- **Push.** Pushes carry no message content, only a nudge to check in. The app needs a `google-services.json` from the same Firebase project as the server's service account; without it, phones still work, but only on their check-in schedule.
+- **Push.** Pushes carry no message content, only a nudge to check in. The app and the server must belong to the same Firebase project: the published app is tied to simhook's production project, so a self-hosted server can wake phones only if you build the app with your own project's `google-services.json` in `android/app/src/release/` and give the server that project's service account. Without that, phones still work, but only on their check-in schedule.
 
 ## Keeping it healthy
 

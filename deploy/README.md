@@ -6,7 +6,7 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
 
 - A VPS with 2 vCPUs and 4 GB of RAM running Ubuntu 24.04 (a Hetzner CX22 or similar). Open ports 22, 80, and 443.
 - The domain on Cloudflare, with a Cloudflare API token that has `Zone: DNS: Edit` on that zone.
-- A Firebase service account JSON for push (the same one used in development).
+- A Firebase service account JSON for push. Use a project of its own for production: the app's release build is tied to one project, and a development key must never be able to push to production phones.
 - SMTP credentials from a transactional email provider (Postmark, Resend, Amazon SES, Mailgun all work).
 
 ## First deploy
