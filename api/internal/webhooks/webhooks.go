@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,7 @@ import (
 	"github.com/simhook/simhook/internal/mail"
 	"github.com/simhook/simhook/internal/secrets"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/validate"
 )
 
 // Event names.
@@ -50,7 +52,7 @@ var AllEvents = []string{
 
 // Errors surfaced to the HTTP layer.
 var (
-	ErrInvalidURL    = errors.New("delivery URL must be an http or https URL with a public host")
+	ErrInvalidURL    = errors.New("delivery URL must be an https URL with a public host")
 	ErrInvalidEvents = errors.New("choose at least one known event")
 	ErrTooMany       = errors.New("webhook limit reached for this account")
 	ErrQueueNotReady = errors.New("job queue not configured")
@@ -100,6 +102,10 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in CreateInput) 
 	if err := s.ValidateURL(in.URL); err != nil {
 		return store.Webhook{}, "", err
 	}
+	name, err := normalizeName(in.Name)
+	if err != nil {
+		return store.Webhook{}, "", err
+	}
 	events, err := normalizeEvents(in.Events)
 	if err != nil {
 		return store.Webhook{}, "", err
@@ -119,7 +125,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, in CreateInput) 
 	if err != nil {
 		return store.Webhook{}, "", err
 	}
-	w, err := s.st.CreateWebhook(ctx, ids.New(), userID, trimName(in.Name), in.URL, enc, events)
+	w, err := s.st.CreateWebhook(ctx, ids.New(), userID, name, in.URL, enc, events)
 	if err != nil {
 		return store.Webhook{}, "", err
 	}
@@ -146,7 +152,11 @@ type UpdateInput struct {
 
 // Update applies a patch.
 func (s *Service) Update(ctx context.Context, userID, id uuid.UUID, in UpdateInput) (store.Webhook, error) {
-	patch := store.WebhookPatch{Name: trimName(in.Name), URL: in.URL, Enabled: in.Enabled}
+	name, err := normalizeName(in.Name)
+	if err != nil {
+		return store.Webhook{}, err
+	}
+	patch := store.WebhookPatch{Name: name, URL: in.URL, Enabled: in.Enabled}
 	if in.URL != nil {
 		if err := s.ValidateURL(*in.URL); err != nil {
 			return store.Webhook{}, err
@@ -208,15 +218,20 @@ func (s *Service) GetDelivery(ctx context.Context, userID, id uuid.UUID) (store.
 	return s.st.GetUserDelivery(ctx, userID, id)
 }
 
-func trimName(n *string) *string {
+// normalizeName trims a label. Blank means unnamed; too long is refused
+// rather than cut, since cutting bytes could split a character.
+func normalizeName(n *string) (*string, error) {
 	if n == nil {
-		return nil
+		return nil, nil
 	}
 	t := strings.TrimSpace(*n)
-	if len(t) > 64 {
-		t = t[:64]
+	if t == "" {
+		return nil, nil
 	}
-	return &t
+	if utf8.RuneCountInString(t) > 64 {
+		return nil, validate.Field("name", "must be at most 64 characters")
+	}
+	return &t, nil
 }
 
 func normalizeEvents(in []string) ([]string, error) {
@@ -240,11 +255,21 @@ func normalizeEvents(in []string) ([]string, error) {
 // URL safety
 // ---------------------------------------------------------------------------
 
-// ValidateURL rejects URLs that are not http(s) or that point at private
-// address space, unless the deployment allows private hosts.
+// ValidateURL rejects URLs that are not https or that point at private
+// address space. A deployment that allows private hosts (self-hosting on a
+// LAN, where there is no TLS to be had) also gets plain http.
 func (s *Service) ValidateURL(raw string) error {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+	if err != nil || u.Host == "" || u.User != nil {
+		return ErrInvalidURL
+	}
+	switch u.Scheme {
+	case "https":
+	case "http":
+		if !s.cfg.WebhookAllowPrivateHosts {
+			return ErrInvalidURL
+		}
+	default:
 		return ErrInvalidURL
 	}
 	if s.cfg.WebhookAllowPrivateHosts {
@@ -429,7 +454,9 @@ func (w *DeliverWorker) Work(ctx context.Context, job *river.Job[DeliverArgs]) e
 }
 
 // Backoff between attempts. The first retry is quick to absorb a blip; the
-// rest spread over a day.
+// rest spread over about two days. Endpoints answering 408, 425, 429, or
+// 5xx, and connection failures, get the whole ladder; other 4xx answers
+// mean the request itself was refused and stop after three tries.
 var retryDelays = [...]time.Duration{
 	1 * time.Minute, 5 * time.Minute, 15 * time.Minute, 1 * time.Hour,
 	3 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
@@ -537,13 +564,22 @@ func (s *Service) attempt(ctx context.Context, deliveryID uuid.UUID) error {
 
 func readExcerpt(r io.Reader) string {
 	b, _ := io.ReadAll(io.LimitReader(r, responseExcerptLimit))
-	return string(b)
+	return excerpt(string(b))
 }
 
 func trimErr(err error) string {
-	s := err.Error()
-	if len(s) > responseExcerptLimit {
-		s = s[:responseExcerptLimit]
+	return excerpt(err.Error())
+}
+
+// excerpt makes text safe to store: no NUL bytes, valid UTF-8, and at most
+// responseExcerptLimit characters, cut on a character boundary. Anything
+// else would make the attempt record fail to write, and a delivery whose
+// attempt cannot be recorded would be retried and delivered again.
+func excerpt(s string) string {
+	s = strings.ToValidUTF8(strings.ReplaceAll(s, "\x00", ""), "�")
+	if utf8.RuneCountInString(s) > responseExcerptLimit {
+		runes := []rune(s)
+		s = string(runes[:responseExcerptLimit])
 	}
 	return s
 }

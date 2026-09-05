@@ -12,6 +12,7 @@ import (
 	"github.com/simhook/simhook/internal/billing"
 	"github.com/simhook/simhook/internal/gateway"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/validate"
 	"github.com/simhook/simhook/internal/webhooks"
 )
 
@@ -98,7 +99,7 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 	if errors.As(err, &apiE) {
 		return apiE
 	}
-	var ve *gateway.ValidationError
+	var ve *validate.Error
 	if errors.As(err, &ve) {
 		return &APIError{Status: http.StatusUnprocessableEntity, Code: "validation_failed",
 			Message: "The request has invalid fields.", Errors: []FieldError{{Field: "body." + ve.Field, Message: ve.Message}}}
@@ -120,6 +121,8 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusForbidden, "account_suspended", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		return apiErr(http.StatusUnauthorized, "invalid_credentials", err.Error())
+	case errors.Is(err, auth.ErrTooManyAttempts):
+		return apiErr(http.StatusTooManyRequests, "rate_limited", err.Error())
 	case errors.Is(err, auth.ErrEmailTaken):
 		return apiErr(http.StatusConflict, "email_taken", err.Error())
 	case errors.Is(err, auth.ErrInvalidCode):

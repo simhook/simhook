@@ -292,7 +292,7 @@
         "additionalProperties": false,
         "properties": {
           "events": {
-            "description": "Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline.",
+            "description": "Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline, ping.",
             "items": {
               "type": "string"
             },
@@ -616,7 +616,7 @@
             "type": "boolean"
           },
           "enabled": {
-            "description": "A disabled phone receives no sends.",
+            "description": "A disabled phone receives no new sends, and sends already queued for it fail.",
             "type": "boolean"
           },
           "heartbeat_interval_minutes": {
@@ -640,6 +640,40 @@
           },
           "send_delay_seconds": {
             "description": "Pause between consecutive sends on the phone.",
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevicePatchSelfBody": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_preferred_sim": {
+            "description": "Set true to fall back to the phone's default SIM.",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "A disabled phone receives no new sends.",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "preferred_sim_subscription_id": {
+            "description": "SIM to send from when a send names none.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "receive_enabled": {
+            "description": "Forward incoming SMS from this phone.",
+            "type": "boolean"
+          },
+          "send_delay_seconds": {
+            "description": "Pause between consecutive sends.",
             "format": "int32",
             "maximum": 3600,
             "minimum": 0,
@@ -716,7 +750,8 @@
         "additionalProperties": false,
         "properties": {
           "body": {
-            "maxLength": 4000,
+            "description": "The text, with concatenated parts already joined.",
+            "maxLength": 20000,
             "minLength": 1,
             "type": "string"
           },
@@ -1092,15 +1127,43 @@
             "format": "date-time",
             "type": "string"
           },
+          "id": {
+            "description": "Poll GET /v1/devices/pairing-codes/{id} to learn when a phone has used the code.",
+            "type": "string"
+          },
           "pair_url": {
             "description": "Deep link the app understands. Encode it as a QR code.",
             "type": "string"
           }
         },
         "required": [
+          "id",
           "code",
           "expires_at",
           "pair_url"
+        ],
+        "type": "object"
+      },
+      "PairingStatusOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "consumed": {
+            "description": "True once a phone has paired with this code.",
+            "type": "boolean"
+          },
+          "device": {
+            "$ref": "#/components/schemas/Device",
+            "description": "The phone that used the code, once one has."
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumed",
+          "expires_at",
+          "device"
         ],
         "type": "object"
       },
@@ -1765,7 +1828,8 @@
         "summary": "List API keys",
         "tags": [
           "api-keys"
-        ]
+        ],
+        "x-simhook-scope": "session"
       },
       "post": {
         "description": "The full key is returned once. Only its hash is stored.",
@@ -1813,7 +1877,8 @@
         "summary": "Create an API key",
         "tags": [
           "api-keys"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/api-keys/{id}": {
@@ -1857,7 +1922,8 @@
         "summary": "Delete an API key",
         "tags": [
           "api-keys"
-        ]
+        ],
+        "x-simhook-scope": "session"
       },
       "patch": {
         "operationId": "rename-api-key",
@@ -1907,7 +1973,8 @@
         "summary": "Rename an API key",
         "tags": [
           "api-keys"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/api-keys/{id}/revoke": {
@@ -1952,7 +2019,8 @@
         "summary": "Revoke an API key",
         "tags": [
           "api-keys"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/login": {
@@ -2040,7 +2108,8 @@
         "summary": "Sign out",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/me": {
@@ -2122,7 +2191,8 @@
         "summary": "Change password",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/password-reset": {
@@ -2241,7 +2311,8 @@
         "summary": "Update profile",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/register": {
@@ -2339,7 +2410,8 @@
         "summary": "Verify the email address",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/verify-email/send": {
@@ -2371,7 +2443,8 @@
         "summary": "Resend the verification code",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/batches": {
@@ -2432,7 +2505,8 @@
         "summary": "List sends",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "read"
       }
     },
     "/v1/batches/{id}": {
@@ -2482,7 +2556,8 @@
         "summary": "Get a send",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "read"
       }
     },
     "/v1/device": {
@@ -2512,7 +2587,8 @@
         "summary": "Unpair this phone",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       },
       "get": {
         "operationId": "device-self",
@@ -2546,7 +2622,8 @@
         "summary": "This phone's record",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       },
       "patch": {
         "operationId": "device-update-self",
@@ -2554,7 +2631,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DevicePatchBody"
+                "$ref": "#/components/schemas/DevicePatchSelfBody"
               }
             }
           },
@@ -2590,7 +2667,8 @@
         "summary": "Change this phone's settings",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/device/heartbeat": {
@@ -2637,7 +2715,8 @@
         "summary": "Check in",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/device/inbound": {
@@ -2684,7 +2763,8 @@
         "summary": "Report a received SMS",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/device/messages": {
@@ -2753,7 +2833,8 @@
         "summary": "This phone's messages",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/device/messages/{id}/status": {
@@ -2762,12 +2843,12 @@
         "operationId": "device-report-status",
         "parameters": [
           {
-            "description": "Message id from the push payload.",
+            "description": "Message id from the outbox.",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "Message id from the push payload.",
+              "description": "Message id from the outbox.",
               "type": "string"
             }
           }
@@ -2812,7 +2893,8 @@
         "summary": "Report a send outcome",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/device/pair": {
@@ -2893,7 +2975,8 @@
         "summary": "Register a new push token",
         "tags": [
           "device"
-        ]
+        ],
+        "x-simhook-scope": "device"
       }
     },
     "/v1/devices": {
@@ -2933,7 +3016,8 @@
         "summary": "List devices",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "read"
       }
     },
     "/v1/devices/pairing-codes": {
@@ -2973,7 +3057,61 @@
         "summary": "Create a pairing code",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "devices"
+      }
+    },
+    "/v1/devices/pairing-codes/{id}": {
+      "get": {
+        "description": "Whether a phone has used the code yet, and which one. Poll it while showing the code.",
+        "operationId": "get-pairing-code",
+        "parameters": [
+          {
+            "description": "Pairing code id from POST /v1/devices/pairing-codes.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Pairing code id from POST /v1/devices/pairing-codes.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingStatusOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Check a pairing code",
+        "tags": [
+          "devices"
+        ],
+        "x-simhook-scope": "devices"
       }
     },
     "/v1/devices/{id}": {
@@ -3018,7 +3156,8 @@
         "summary": "Unpair a device",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "devices"
       },
       "get": {
         "operationId": "get-device",
@@ -3067,10 +3206,11 @@
         "summary": "Get a device",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "read"
       },
       "patch": {
-        "description": "Only the fields you send change. The phone picks the new settings up on its next check-in.",
+        "description": "Only the fields you send change. The phone is told at once and reloads its settings within seconds; a phone that is offline picks them up when it is back.",
         "operationId": "update-device",
         "parameters": [
           {
@@ -3125,7 +3265,8 @@
         "summary": "Update device settings",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "devices"
       }
     },
     "/v1/devices/{id}/default": {
@@ -3177,7 +3318,8 @@
         "summary": "Make this the default device",
         "tags": [
           "devices"
-        ]
+        ],
+        "x-simhook-scope": "devices"
       }
     },
     "/v1/messages": {
@@ -3338,7 +3480,8 @@
         "summary": "List messages",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "read"
       },
       "post": {
         "description": "Queues one text to one or more recipients from a phone on the account. Acceptance is not delivery: follow the batch or subscribe to webhooks for the outcome. Every recipient counts as one message against the plan.",
@@ -3386,7 +3529,8 @@
         "summary": "Send an SMS",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "send"
       }
     },
     "/v1/messages/{id}": {
@@ -3435,7 +3579,8 @@
         "summary": "Get a message",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "read"
       }
     },
     "/v1/plans": {
@@ -3506,7 +3651,8 @@
         "summary": "Account totals",
         "tags": [
           "messages"
-        ]
+        ],
+        "x-simhook-scope": "read"
       }
     },
     "/v1/webhooks": {
@@ -3545,10 +3691,11 @@
         "summary": "List webhooks",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       },
       "post": {
-        "description": "Subscribes a URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=\u003cunix\u003e,v1=\u003chex hmac-sha256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e. Respond 2xx within 30 seconds; other responses are retried over a day.",
+        "description": "Subscribes an https URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=\u003cunix\u003e,v1=\u003chex hmac-sha256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e. Respond 2xx within 30 seconds; other responses are retried for about two days.",
         "operationId": "create-webhook",
         "requestBody": {
           "content": {
@@ -3593,7 +3740,8 @@
         "summary": "Create a webhook",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     },
     "/v1/webhooks/deliveries": {
@@ -3628,6 +3776,16 @@
             "in": "query",
             "name": "event",
             "schema": {
+              "enum": [
+                "message.received",
+                "message.sent",
+                "message.delivered",
+                "message.failed",
+                "message.unknown",
+                "device.online",
+                "device.offline",
+                "ping"
+              ],
               "type": "string"
             }
           },
@@ -3700,7 +3858,8 @@
         "summary": "List deliveries",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     },
     "/v1/webhooks/deliveries/{id}": {
@@ -3749,7 +3908,8 @@
         "summary": "Get a delivery",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     },
     "/v1/webhooks/{id}": {
@@ -3791,7 +3951,8 @@
         "summary": "Delete a webhook",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       },
       "get": {
         "operationId": "get-webhook",
@@ -3838,7 +3999,8 @@
         "summary": "Get a webhook",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       },
       "patch": {
         "operationId": "update-webhook",
@@ -3895,7 +4057,8 @@
         "summary": "Update a webhook",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     },
     "/v1/webhooks/{id}/rotate-secret": {
@@ -3945,7 +4108,8 @@
         "summary": "Rotate the signing secret",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     },
     "/v1/webhooks/{id}/test": {
@@ -3995,7 +4159,8 @@
         "summary": "Send a test event",
         "tags": [
           "webhooks"
-        ]
+        ],
+        "x-simhook-scope": "webhooks"
       }
     }
   },

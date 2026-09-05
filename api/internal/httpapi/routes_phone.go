@@ -16,6 +16,9 @@ import (
 // Endpoints under /v1/device are called by the phone app with its device
 // token. They are documented but not part of the developer surface.
 
+// scopeDevice marks the phone's own endpoints in the generated reference.
+const scopeDevice = "device"
+
 type pairInput struct {
 	Body struct {
 		Code           string  `json:"code" minLength:"8" maxLength:"9" doc:"Pairing code from the dashboard."`
@@ -40,6 +43,24 @@ type pairOutput struct {
 	}
 }
 
+// devicePatchSelfBody is what a phone may change about itself. The check-in
+// interval is the dashboard's to set, so it is not here.
+type devicePatchSelfBody struct {
+	Name                       *string `json:"name,omitempty" maxLength:"64"`
+	Enabled                    *bool   `json:"enabled,omitempty" doc:"A disabled phone receives no new sends."`
+	ReceiveEnabled             *bool   `json:"receive_enabled,omitempty" doc:"Forward incoming SMS from this phone."`
+	SendDelaySeconds           *int32  `json:"send_delay_seconds,omitempty" minimum:"0" maximum:"3600" doc:"Pause between consecutive sends."`
+	PreferredSimSubscriptionID *int32  `json:"preferred_sim_subscription_id,omitempty" doc:"SIM to send from when a send names none."`
+	ClearPreferredSim          bool    `json:"clear_preferred_sim,omitempty" doc:"Set true to fall back to the phone's default SIM."`
+}
+
+func (b devicePatchSelfBody) patch() gateway.DevicePatch {
+	return gateway.DevicePatch{
+		Name: b.Name, Enabled: b.Enabled, ReceiveEnabled: b.ReceiveEnabled, SendDelaySeconds: b.SendDelaySeconds,
+		PreferredSimSubscriptionID: b.PreferredSimSubscriptionID, ClearPreferredSim: b.ClearPreferredSim,
+	}
+}
+
 type heartbeatInput struct {
 	Body struct {
 		PushToken      *string         `json:"push_token,omitempty" maxLength:"4096"`
@@ -59,7 +80,7 @@ type pushTokenInput struct {
 }
 
 type statusReportInput struct {
-	ID   string `path:"id" doc:"Message id from the push payload."`
+	ID   string `path:"id" doc:"Message id from the outbox."`
 	Body struct {
 		Status       string     `json:"status" enum:"sent,delivered,failed"`
 		At           *time.Time `json:"at,omitempty" doc:"When it happened on the phone. Defaults to now."`
@@ -71,7 +92,7 @@ type statusReportInput struct {
 type inboundInput struct {
 	Body struct {
 		Sender            string    `json:"sender" minLength:"1" maxLength:"64"`
-		Body              string    `json:"body" minLength:"1" maxLength:"4000"`
+		Body              string    `json:"body" minLength:"1" maxLength:"20000" doc:"The text, with concatenated parts already joined."`
 		ReceivedAt        time.Time `json:"received_at"`
 		Fingerprint       *string   `json:"fingerprint,omitempty" maxLength:"128" doc:"Hash of sender, body, and timestamp computed on the phone. Repeats are ignored."`
 		SimSubscriptionID *int32    `json:"sim_subscription_id,omitempty"`
@@ -117,7 +138,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-self", Method: http.MethodGet, Path: "/v1/device",
-		Summary: "This phone's record", Tags: tags, Security: securityDevice,
+		Summary: "This phone's record", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
 	}, func(ctx context.Context, _ *struct{}) (*deviceOutput, error) {
 		p, err := requireDevice(ctx)
 		if err != nil {
@@ -130,8 +151,8 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-update-self", Method: http.MethodPatch, Path: "/v1/device",
-		Summary: "Change this phone's settings", Tags: tags, Security: securityDevice,
-	}, func(ctx context.Context, in *struct{ Body devicePatchBody }) (*deviceOutput, error) {
+		Summary: "Change this phone's settings", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
+	}, func(ctx context.Context, in *struct{ Body devicePatchSelfBody }) (*deviceOutput, error) {
 		p, err := requireDevice(ctx)
 		if err != nil {
 			return nil, err
@@ -147,7 +168,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-unpair", Method: http.MethodDelete, Path: "/v1/device",
-		Summary: "Unpair this phone", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityDevice,
+		Summary: "Unpair this phone", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityDevice, Extensions: scoped(scopeDevice),
 		Description: "Removes this phone from the account and revokes its token. Message history is kept.",
 	}, func(ctx context.Context, _ *struct{}) (*emptyOutput, error) {
 		p, err := requireDevice(ctx)
@@ -162,7 +183,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-heartbeat", Method: http.MethodPost, Path: "/v1/device/heartbeat",
-		Summary: "Check in", Tags: tags, Security: securityDevice,
+		Summary: "Check in", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
 		Description: "Reports the phone is alive and uploads its state. The response carries the settings the phone should apply.",
 	}, func(ctx context.Context, in *heartbeatInput) (*deviceOutput, error) {
 		p, err := requireDevice(ctx)
@@ -183,7 +204,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-push-token", Method: http.MethodPost, Path: "/v1/device/push-token",
-		Summary: "Register a new push token", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityDevice,
+		Summary: "Register a new push token", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityDevice, Extensions: scoped(scopeDevice),
 	}, func(ctx context.Context, in *pushTokenInput) (*emptyOutput, error) {
 		p, err := requireDevice(ctx)
 		if err != nil {
@@ -197,7 +218,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-report-status", Method: http.MethodPost, Path: "/v1/device/messages/{id}/status",
-		Summary: "Report a send outcome", Tags: tags, Security: securityDevice,
+		Summary: "Report a send outcome", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
 		Description: "Idempotent. Out-of-order reports never move a message backwards.",
 	}, func(ctx context.Context, in *statusReportInput) (*messageOutput, error) {
 		p, err := requireDevice(ctx)
@@ -223,7 +244,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-report-inbound", Method: http.MethodPost, Path: "/v1/device/inbound",
-		Summary: "Report a received SMS", Tags: tags, Security: securityDevice,
+		Summary: "Report a received SMS", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
 		Description: "Stores an incoming message and fans out message.received. Returns 201 when stored, 200 when it was already known.",
 	}, func(ctx context.Context, in *inboundInput) (*inboundOutput, error) {
 		p, err := requireDevice(ctx)
@@ -248,7 +269,7 @@ func (s *Server) registerPhone() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "device-messages", Method: http.MethodGet, Path: "/v1/device/messages",
-		Summary: "This phone's messages", Tags: tags, Security: securityDevice,
+		Summary: "This phone's messages", Tags: tags, Security: securityDevice, Extensions: scoped(scopeDevice),
 	}, func(ctx context.Context, in *deviceMessagesInput) (*messagesOutput, error) {
 		p, err := requireDevice(ctx)
 		if err != nil {

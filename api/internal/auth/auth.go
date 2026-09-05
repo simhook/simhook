@@ -6,26 +6,30 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/mail"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/time/rate"
 
 	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/ids"
 	mailer "github.com/simhook/simhook/internal/mail"
+	"github.com/simhook/simhook/internal/ratelimit"
 	"github.com/simhook/simhook/internal/secrets"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/validate"
 )
 
 // Errors surfaced to the HTTP layer.
 var (
 	ErrEmailTaken         = errors.New("an account with this email already exists")
 	ErrInvalidCredentials = errors.New("wrong email or password")
+	ErrTooManyAttempts    = errors.New("too many sign-in attempts for this account; wait a minute and try again")
 	ErrInvalidCode        = errors.New("the code is wrong or has expired")
 	ErrUnauthenticated    = errors.New("authentication required")
 	ErrForbidden          = errors.New("this credential cannot perform that action")
@@ -90,17 +94,38 @@ func FromContext(ctx context.Context) *Principal {
 	return p
 }
 
+// Sign-in attempts per account, right or wrong, before the account is
+// asked to wait. Guessing a password then costs a minute per five tries
+// whatever the caller's address.
+const (
+	loginRate  = 12 * time.Second
+	loginBurst = 5
+)
+
+// touchInterval bounds how often a credential's bookkeeping row is written.
+const touchInterval = time.Minute
+
 // Service implements credential operations.
 type Service struct {
 	st     *store.Store
 	cfg    *config.Config
 	mailer mailer.Mailer
 	log    *slog.Logger
+	logins *ratelimit.Keyed
+
+	touchMu sync.Mutex
+	touched map[uuid.UUID]time.Time
+	pending map[uuid.UUID]int
 }
 
 // New builds the service.
 func New(st *store.Store, cfg *config.Config, m mailer.Mailer, log *slog.Logger) *Service {
-	return &Service{st: st, cfg: cfg, mailer: m, log: log}
+	return &Service{
+		st: st, cfg: cfg, mailer: m, log: log,
+		logins:  ratelimit.NewKeyed(rate.Every(loginRate), loginBurst),
+		touched: map[uuid.UUID]time.Time{},
+		pending: map[uuid.UUID]int{},
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -159,11 +184,15 @@ func (s *Service) Register(ctx context.Context, email, password, name string) (s
 	return u, nil
 }
 
-// Login checks a password and returns the account.
+// Login checks a password and returns the account. Attempts are throttled
+// per account as well as per address upstream.
 func (s *Service) Login(ctx context.Context, email, password string) (store.User, error) {
 	email, err := NormalizeEmail(email)
 	if err != nil {
 		return store.User{}, ErrInvalidCredentials
+	}
+	if !s.logins.Allow(email) {
+		return store.User{}, ErrTooManyAttempts
 	}
 	u, err := s.st.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -343,7 +372,7 @@ func (s *Service) ListAPIKeys(ctx context.Context, userID uuid.UUID, includeRevo
 func (s *Service) RenameAPIKey(ctx context.Context, userID, id uuid.UUID, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return fmt.Errorf("name is required")
+		return validate.Field("name", "required")
 	}
 	return s.st.RenameAPIKey(ctx, userID, id, name)
 }
@@ -369,11 +398,11 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, name strin
 	}
 	for _, sc := range scopes {
 		if !slices.Contains(AllScopes, sc) {
-			return "", store.APIKey{}, fmt.Errorf("unknown scope %q", sc)
+			return "", store.APIKey{}, validate.Field("scopes", "unknown scope "+sc)
 		}
 	}
 	if expires != nil && expires.Before(time.Now()) {
-		return "", store.APIKey{}, errors.New("expires_at must be in the future")
+		return "", store.APIKey{}, validate.Field("expires_at", "must be in the future")
 	}
 	token, hash, err := secrets.NewToken(secrets.PrefixAPIKey)
 	if err != nil {
@@ -403,7 +432,7 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken, apiKey, bearer
 			}
 			return nil, err
 		}
-		go s.touch(func(c context.Context) error { return s.st.TouchDeviceToken(c, tok.ID) })
+		s.touch(tok.ID, func(c context.Context, _ int) error { return s.st.TouchDeviceToken(c, tok.ID) })
 		return &Principal{Kind: KindDevice, Device: &d}, nil
 
 	case apiKey != "" || strings.HasPrefix(bearer, secrets.PrefixAPIKey):
@@ -425,7 +454,7 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken, apiKey, bearer
 		if u.BannedAt != nil {
 			return nil, ErrBanned
 		}
-		go s.touch(func(c context.Context) error { return s.st.TouchAPIKey(c, k.ID) })
+		s.touch(k.ID, func(c context.Context, n int) error { return s.st.TouchAPIKey(c, k.ID, n) })
 		return &Principal{Kind: KindAPIKey, User: &u, APIKey: &k}, nil
 
 	case sessionToken != "":
@@ -443,17 +472,41 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken, apiKey, bearer
 		if u.BannedAt != nil {
 			return nil, ErrBanned
 		}
-		go s.touch(func(c context.Context) error { return s.st.TouchSession(c, sess.ID) })
+		s.touch(sess.ID, func(c context.Context, _ int) error { return s.st.TouchSession(c, sess.ID) })
 		return &Principal{Kind: KindSession, User: &u}, nil
 	}
 	return nil, nil
 }
 
-// touch runs a best-effort bookkeeping write off the request path.
-func (s *Service) touch(fn func(context.Context) error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := fn(ctx); err != nil {
-		s.log.Debug("credential touch failed", "err", err)
+// touch runs a credential's bookkeeping write off the request path, at most
+// once a minute per credential. Uses in between are counted and handed to
+// the next write as n, so a busy key neither spawns a goroutine per request
+// nor loses its use count.
+func (s *Service) touch(id uuid.UUID, fn func(ctx context.Context, n int) error) {
+	s.touchMu.Lock()
+	now := time.Now()
+	s.pending[id]++
+	if last, ok := s.touched[id]; ok && now.Sub(last) < touchInterval {
+		s.touchMu.Unlock()
+		return
 	}
+	if len(s.touched) > 10000 {
+		for k, t := range s.touched {
+			if now.Sub(t) > touchInterval {
+				delete(s.touched, k)
+				delete(s.pending, k)
+			}
+		}
+	}
+	n := s.pending[id]
+	s.pending[id] = 0
+	s.touched[id] = now
+	s.touchMu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := fn(ctx, n); err != nil {
+			s.log.Debug("credential touch failed", "err", err)
+		}
+	}()
 }

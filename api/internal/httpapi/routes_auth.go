@@ -174,7 +174,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "logout", Method: http.MethodPost, Path: "/v1/auth/logout",
-		Summary: "Sign out", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Sign out", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
 	}, func(ctx context.Context, _ *struct{}) (*clearCookieOutput, error) {
 		if tok, ok := ctx.Value(sessionTokenKey{}).(string); ok && tok != "" {
 			_ = s.deps.Auth.Logout(ctx, tok)
@@ -208,7 +209,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "send-verification", Method: http.MethodPost, Path: "/v1/auth/verify-email/send",
-		Summary: "Resend the verification code", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Resend the verification code", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
 	}, func(ctx context.Context, _ *struct{}) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -222,7 +224,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "verify-email", Method: http.MethodPost, Path: "/v1/auth/verify-email",
-		Summary: "Verify the email address", Tags: tags, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Verify the email address", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *verifyEmailInput) (*userOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -258,7 +261,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "change-password", Method: http.MethodPost, Path: "/v1/auth/password",
-		Summary: "Change password", Tags: tags, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Change password", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *changePasswordInput) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -272,7 +276,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "update-profile", Method: http.MethodPatch, Path: "/v1/auth/profile",
-		Summary: "Update profile", Tags: tags, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Update profile", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *profileInput) (*userOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -292,7 +297,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "create-api-key", Method: http.MethodPost, Path: "/v1/api-keys",
-		Summary: "Create an API key", Tags: ktags, DefaultStatus: http.StatusCreated, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Create an API key", Tags: ktags, DefaultStatus: http.StatusCreated, Security: securityUser,
 		Description: "The full key is returned once. Only its hash is stored.",
 	}, func(ctx context.Context, in *createKeyInput) (*createKeyOutput, error) {
 		p, err := requireSession(ctx)
@@ -311,7 +317,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-api-keys", Method: http.MethodGet, Path: "/v1/api-keys",
-		Summary: "List API keys", Tags: ktags, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "List API keys", Tags: ktags, Security: securityUser,
 	}, func(ctx context.Context, in *listKeysInput) (*listKeysOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -328,7 +335,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "rename-api-key", Method: http.MethodPatch, Path: "/v1/api-keys/{id}",
-		Summary: "Rename an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Rename an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
 	}, func(ctx context.Context, in *renameKeyInput) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
@@ -346,7 +354,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "revoke-api-key", Method: http.MethodPost, Path: "/v1/api-keys/{id}/revoke",
-		Summary: "Revoke an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Revoke an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
 		Description: "Stops the key working immediately while keeping its record.",
 	}, func(ctx context.Context, in *keyIDInput) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
@@ -365,7 +374,8 @@ func (s *Server) registerAuth() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "delete-api-key", Method: http.MethodDelete, Path: "/v1/api-keys/{id}",
-		Summary: "Delete an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Extensions: scoped(scopeSession),
+		Summary:    "Delete an API key", Tags: ktags, DefaultStatus: http.StatusNoContent, Security: securityUser,
 	}, func(ctx context.Context, in *keyIDInput) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {

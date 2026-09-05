@@ -117,7 +117,7 @@ func Build(ctx context.Context, cfg *config.Config, log *slog.Logger, opts Optio
 				&river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(24*time.Hour),
 				func() (river.JobArgs, *river.InsertOpts) { return webhooks.AutoPauseArgs{}, nil },
-				nil),
+				&river.PeriodicJobOpts{RunOnStart: true}),
 		}
 	}
 	queue, err := river.NewClient(riverpgxv5.New(pool), &river.Config{

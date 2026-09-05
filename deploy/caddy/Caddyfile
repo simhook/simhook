@@ -2,12 +2,14 @@
 {
 	email {$ACME_EMAIL}
 	servers {
-		# Cloudflare sits in front of us; trust its ranges so X-Forwarded-For
-		# carries the visitor's address.
+		# Cloudflare sits in front of us. Trust its ranges, and take the
+		# visitor's address from the header only Cloudflare writes; anything a
+		# client can send itself (X-Forwarded-For) is not believed.
 		trusted_proxies cloudflare {
 			interval 12h
 			timeout 15s
 		}
+		client_ip_headers CF-Connecting-IP
 	}
 }
 
@@ -20,7 +22,13 @@
 {$API_DOMAIN} {
 	import cloudflare_tls
 	encode zstd gzip
-	reverse_proxy api:8080
+	# The API reads the visitor's address from X-Real-IP and nothing else, so
+	# it is set here from the resolved client address and every client-sent
+	# lookalike is dropped.
+	reverse_proxy api:8080 {
+		header_up X-Real-IP {client_ip}
+		header_up -True-Client-IP
+	}
 }
 
 {$APP_DOMAIN} {

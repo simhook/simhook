@@ -39,7 +39,8 @@ var statusEvent = map[string]string{
 
 // ReportStatus records what happened to an outbound message on the phone.
 // It is idempotent: a repeated or out-of-order report returns the current
-// message without changing it.
+// message without changing it. The transition, the batch counters, and the
+// webhook fan-out commit together.
 func (s *Service) ReportStatus(ctx context.Context, device store.Device, messageID uuid.UUID, status string, at time.Time, errorCode, errorMessage *string) (store.Message, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	from, ok := allowedFrom[status]
@@ -53,7 +54,28 @@ func (s *Service) ReportStatus(ctx context.Context, device store.Device, message
 		code := "send_failed"
 		errorCode = &code
 	}
-	t, err := s.st.TransitionMessage(ctx, messageID, device.ID, from, status, at, errorCode, errorMessage)
+	var out store.Message
+	err := s.st.Tx(ctx, func(tx pgx.Tx, st *store.Store) error {
+		t, err := st.TransitionMessage(ctx, messageID, device.ID, from, status, at, errorCode, errorMessage)
+		if err != nil {
+			return err
+		}
+		if t.BatchID != nil {
+			if _, err := st.ApplyBatchTransition(ctx, *t.BatchID, t.PrevStatus, status, 1); err != nil {
+				return err
+			}
+		}
+		if status == store.StatusSent {
+			// A message counts as sent by the phone once the carrier took it,
+			// not when it was handed over.
+			if err := st.AddDeviceCounts(ctx, device.ID, 1, 0); err != nil {
+				return err
+			}
+		}
+		s.emitMessage(ctx, tx, st, statusEvent[status], t.Message)
+		out = t.Message
+		return nil
+	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			// Either the message is not on this device, or it is already past
@@ -62,13 +84,7 @@ func (s *Service) ReportStatus(ctx context.Context, device store.Device, message
 		}
 		return store.Message{}, err
 	}
-	if t.BatchID != nil {
-		if _, err := s.st.ApplyBatchTransition(ctx, *t.BatchID, t.PrevStatus, status, 1); err != nil {
-			return store.Message{}, err
-		}
-	}
-	s.emitMessage(ctx, nil, s.st, statusEvent[status], t.Message)
-	return t.Message, nil
+	return out, nil
 }
 
 // InboundInput is a received SMS.
@@ -138,7 +154,8 @@ type HeartbeatInput struct {
 }
 
 // Heartbeat records a check-in and returns the device so the phone can sync
-// settings. A device that was offline emits device.online.
+// settings. A device that was offline emits device.online, once, however
+// many check-ins race.
 func (s *Service) Heartbeat(ctx context.Context, device store.Device, in HeartbeatInput) (store.Device, error) {
 	if in.PushToken != nil && strings.TrimSpace(*in.PushToken) == "" {
 		in.PushToken = nil
@@ -192,37 +209,50 @@ func (w *ReconcileWorker) Work(ctx context.Context, _ *river.Job[ReconcileArgs])
 	return w.svc.reconcileStale(ctx)
 }
 
+// reconcileStale moves messages nobody reported on to unknown. The flip, the
+// batch counters, and the webhook fan-out commit together so a crash in the
+// middle cannot leave counters drifted.
 func (s *Service) reconcileStale(ctx context.Context) error {
-	stale, err := s.st.MarkStaleUnknown(ctx, time.Now().Add(-s.cfg.StaleAfter()))
+	var count int
+	err := s.st.Tx(ctx, func(tx pgx.Tx, st *store.Store) error {
+		stale, err := st.MarkStaleUnknown(ctx, time.Now().Add(-s.cfg.StaleAfter()))
+		if err != nil {
+			return err
+		}
+		count = len(stale)
+		if count == 0 {
+			return nil
+		}
+		type key struct {
+			batch uuid.UUID
+			prev  string
+		}
+		counts := map[key]int{}
+		for _, m := range stale {
+			if m.BatchID != nil {
+				counts[key{*m.BatchID, m.PrevStatus}]++
+			}
+		}
+		for k, n := range counts {
+			if _, err := st.ApplyBatchTransition(ctx, k.batch, k.prev, store.StatusUnknown, n); err != nil {
+				return err
+			}
+		}
+		for _, sm := range stale {
+			m, err := st.GetUserMessage(ctx, sm.UserID, sm.ID)
+			if err != nil {
+				return err
+			}
+			s.emitMessage(ctx, tx, st, webhooks.EventMessageUnknown, m)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	if len(stale) == 0 {
-		return nil
+	if count > 0 {
+		s.log.Info("stale messages reconciled", "count", count)
 	}
-	type key struct {
-		batch uuid.UUID
-		prev  string
-	}
-	counts := map[key]int{}
-	for _, m := range stale {
-		if m.BatchID != nil {
-			counts[key{*m.BatchID, m.PrevStatus}]++
-		}
-	}
-	for k, n := range counts {
-		if _, err := s.st.ApplyBatchTransition(ctx, k.batch, k.prev, store.StatusUnknown, n); err != nil {
-			s.log.Warn("batch counter update failed", "batch", k.batch, "err", err)
-		}
-	}
-	for _, sm := range stale {
-		m, err := s.st.GetUserMessage(ctx, sm.UserID, sm.ID)
-		if err != nil {
-			continue
-		}
-		s.emitMessage(ctx, nil, s.st, webhooks.EventMessageUnknown, m)
-	}
-	s.log.Info("stale messages reconciled", "count", len(stale))
 	return nil
 }
 

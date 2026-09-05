@@ -269,7 +269,8 @@ type WebhookFailureStats struct {
 }
 
 // WebhookFailureStatsSince aggregates finished deliveries per enabled webhook
-// over a window.
+// over a window. Deliveries from before the webhook was last enabled do not
+// count: re-enabling is a fresh start, not a way to be paused again at once.
 func (s *Store) WebhookFailureStatsSince(ctx context.Context, since time.Time) ([]WebhookFailureStats, error) {
 	return many[WebhookFailureStats](s.q.Query(ctx, `
 		select d.webhook_id,
@@ -277,7 +278,7 @@ func (s *Store) WebhookFailureStatsSince(ctx context.Context, since time.Time) (
 			count(*) filter (where d.status = 'delivered') as delivered
 		from webhook_deliveries d
 		join webhooks w on w.id = d.webhook_id
-		where w.enabled and w.deleted_at is null and d.created_at >= $1
-			and (w.last_enabled_at is null or w.last_enabled_at < $1)
+		where w.enabled and w.deleted_at is null
+			and d.created_at >= greatest($1, coalesce(w.last_enabled_at, $1))
 		group by d.webhook_id`, since))
 }

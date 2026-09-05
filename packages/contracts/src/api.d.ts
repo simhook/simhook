@@ -464,7 +464,7 @@ export interface paths {
         head?: never;
         /**
          * Update device settings
-         * @description Only the fields you send change. The phone picks the new settings up on its next check-in.
+         * @description Only the fields you send change. The phone is told at once and reloads its settings within seconds; a phone that is offline picks them up when it is back.
          */
         patch: operations["update-device"];
         trace?: never;
@@ -503,6 +503,26 @@ export interface paths {
          * @description Mints a code valid for 10 minutes. Enter it in the phone app, or show pair_url as a QR code for the app to scan.
          */
         post: operations["create-pairing-code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/pairing-codes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check a pairing code
+         * @description Whether a phone has used the code yet, and which one. Poll it while showing the code.
+         */
+        get: operations["get-pairing-code"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -599,7 +619,7 @@ export interface paths {
         put?: never;
         /**
          * Create a webhook
-         * @description Subscribes a URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=<unix>,v1=<hex hmac-sha256 of "<t>.<body>">. Respond 2xx within 30 seconds; other responses are retried over a day.
+         * @description Subscribes an https URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=<unix>,v1=<hex hmac-sha256 of "<t>.<body>">. Respond 2xx within 30 seconds; other responses are retried for about two days.
          */
         post: operations["create-webhook"];
         delete?: never;
@@ -796,7 +816,7 @@ export interface components {
             key: string;
         };
         CreateWebhookInputBody: {
-            /** @description Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline. */
+            /** @description Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline, ping. */
             events: string[];
             name?: string;
             /**
@@ -882,7 +902,7 @@ export interface components {
         DevicePatchBody: {
             /** @description Set true to fall back to the phone's default SIM. */
             clear_preferred_sim?: boolean;
-            /** @description A disabled phone receives no sends. */
+            /** @description A disabled phone receives no new sends, and sends already queued for it fail. */
             enabled?: boolean;
             /** Format: int32 */
             heartbeat_interval_minutes?: number;
@@ -897,6 +917,25 @@ export interface components {
             /**
              * Format: int32
              * @description Pause between consecutive sends on the phone.
+             */
+            send_delay_seconds?: number;
+        };
+        DevicePatchSelfBody: {
+            /** @description Set true to fall back to the phone's default SIM. */
+            clear_preferred_sim?: boolean;
+            /** @description A disabled phone receives no new sends. */
+            enabled?: boolean;
+            name?: string;
+            /**
+             * Format: int32
+             * @description SIM to send from when a send names none.
+             */
+            preferred_sim_subscription_id?: number;
+            /** @description Forward incoming SMS from this phone. */
+            receive_enabled?: boolean;
+            /**
+             * Format: int32
+             * @description Pause between consecutive sends.
              */
             send_delay_seconds?: number;
         };
@@ -923,6 +962,7 @@ export interface components {
             telemetry?: unknown;
         };
         InboundInputBody: {
+            /** @description The text, with concatenated parts already joined. */
             body: string;
             /** @description Hash of sender, body, and timestamp computed on the phone. Repeats are ignored. */
             fingerprint?: string;
@@ -1003,8 +1043,18 @@ export interface components {
             code: string;
             /** Format: date-time */
             expires_at: string;
+            /** @description Poll GET /v1/devices/pairing-codes/{id} to learn when a phone has used the code. */
+            id: string;
             /** @description Deep link the app understands. Encode it as a QR code. */
             pair_url: string;
+        };
+        PairingStatusOutputBody: {
+            /** @description True once a phone has paired with this code. */
+            consumed: boolean;
+            /** @description The phone that used the code, once one has. */
+            device: components["schemas"]["Device"];
+            /** Format: date-time */
+            expires_at: string;
         };
         PairInputBody: {
             /** Format: int32 */
@@ -1809,7 +1859,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DevicePatchBody"];
+                "application/json": components["schemas"]["DevicePatchSelfBody"];
             };
         };
         responses: {
@@ -1937,7 +1987,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Message id from the push payload. */
+                /** @description Message id from the outbox. */
                 id: string;
             };
             cookie?: never;
@@ -2206,6 +2256,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PairingCodeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "get-pairing-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pairing code id from POST /v1/devices/pairing-codes. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PairingStatusOutputBody"];
                 };
             };
             /** @description Error */
@@ -2613,7 +2695,7 @@ export interface operations {
         parameters: {
             query?: {
                 cursor?: string;
-                event?: string;
+                event?: "message.received" | "message.sent" | "message.delivered" | "message.failed" | "message.unknown" | "device.online" | "device.offline" | "ping";
                 from?: string;
                 limit?: number;
                 status?: "pending" | "delivered" | "retrying" | "failed";

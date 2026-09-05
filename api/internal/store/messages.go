@@ -253,6 +253,7 @@ func (s *Store) ApplyBatchTransition(ctx context.Context, batchID uuid.UUID, fro
 				when recipient_count - (dispatched_count + sent_count + delivered_count + failed_count + unknown_count) = recipient_count then 'queued'
 				when recipient_count - (sent_count + delivered_count + failed_count + unknown_count) > 0 then 'processing'
 				when failed_count = recipient_count then 'failed'
+				when unknown_count = recipient_count then 'unknown'
 				when failed_count > 0 or unknown_count > 0 then 'partial'
 				else 'completed' end)::batch_status,
 			completed_at = case

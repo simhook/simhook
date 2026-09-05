@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -22,6 +22,7 @@ import (
 	"github.com/simhook/simhook/internal/billing"
 	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/gateway"
+	"github.com/simhook/simhook/internal/ratelimit"
 	"github.com/simhook/simhook/internal/webhooks"
 )
 
@@ -40,11 +41,17 @@ type Server struct {
 	deps    Deps
 	api     huma.API
 	router  chi.Router
-	limiter *ipLimiter
+	limiter *ratelimit.Keyed
 }
 
 // Session cookie name.
 const sessionCookie = "simhook_session"
+
+// clientIPHeader is the one header the proxy in deploy/ fills with the
+// visitor's address. Nothing else is trusted: anything a client can send
+// itself (X-Forwarded-For, True-Client-IP) would let it pick its own
+// throttle bucket.
+const clientIPHeader = "X-Real-IP"
 
 // Security scheme names used in the OpenAPI document.
 const (
@@ -58,6 +65,18 @@ var (
 	securityDevice = []map[string][]string{{secDevice: {}}}
 )
 
+// scopeExtension names the OpenAPI extension that says which API key scope
+// an operation needs ("session" for dashboard-only operations, "device" for
+// the phone's). The generated reference renders it.
+const scopeExtension = "x-simhook-scope"
+
+// scopeSession marks operations only a signed-in dashboard session may call.
+const scopeSession = "session"
+
+func scoped(scope string) map[string]any {
+	return map[string]any{scopeExtension: scope}
+}
+
 // New builds the router. Deps may be partially nil when only the OpenAPI
 // document is needed.
 func New(deps Deps) *Server {
@@ -66,8 +85,7 @@ func New(deps Deps) *Server {
 	}
 	router := chi.NewRouter()
 	if deps.Config.TrustProxy {
-		// Only behind a proxy that rewrites X-Forwarded-For, such as Caddy in deploy/.
-		router.Use(middleware.RealIP)
+		router.Use(clientIP(clientIPHeader))
 	}
 	router.Use(middleware.RequestID)
 	router.Use(recoverer(deps.Log))
@@ -91,7 +109,7 @@ func New(deps Deps) *Server {
 	cfg.CreateHooks = nil
 
 	api := humachi.New(router, cfg)
-	s := &Server{deps: deps, api: api, router: router, limiter: newIPLimiter(rate.Every(3*time.Second), 20)}
+	s := &Server{deps: deps, api: api, router: router, limiter: ratelimit.NewKeyed(rate.Every(3*time.Second), 20)}
 	api.UseMiddleware(s.authenticate)
 
 	s.registerMisc()
@@ -204,6 +222,21 @@ func requireDevice(ctx context.Context) (*auth.Principal, error) {
 // Plain middleware
 // ---------------------------------------------------------------------------
 
+// clientIP replaces the connection address with the one the proxy put in
+// header, when it is a valid address. Only enabled behind our own proxy.
+func clientIP(header string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if raw := strings.TrimSpace(r.Header.Get(header)); raw != "" {
+				if addr, err := netip.ParseAddr(raw); err == nil {
+					r.RemoteAddr = addr.String()
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // cors admits the dashboard and, when configured, the public site: both are
 // first-party origins that talk to the API with the session cookie.
 func cors(cfg *config.Config) func(http.Handler) http.Handler {
@@ -217,14 +250,16 @@ func cors(cfg *config.Config) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			// The answer depends on the origin whether or not this one is
+			// allowed, so caches must key on it either way.
+			h.Add("Vary", "Origin")
 			if o := r.Header.Get("Origin"); o != "" && allowed[o] {
-				h := w.Header()
 				h.Set("Access-Control-Allow-Origin", o)
 				h.Set("Access-Control-Allow-Credentials", "true")
 				h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key")
 				h.Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 				h.Set("Access-Control-Max-Age", "600")
-				h.Add("Vary", "Origin")
 				if r.Method == http.MethodOptions {
 					w.WriteHeader(http.StatusNoContent)
 					return
@@ -271,50 +306,18 @@ func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// ipLimiter throttles credential endpoints per client address.
-type ipLimiter struct {
-	mu       sync.Mutex
-	limiters map[string]*entry
-	rate     rate.Limit
-	burst    int
-}
-
-type entry struct {
-	l    *rate.Limiter
-	seen time.Time
-}
-
-func newIPLimiter(r rate.Limit, burst int) *ipLimiter {
-	return &ipLimiter{limiters: map[string]*entry{}, rate: r, burst: burst}
-}
-
-func (l *ipLimiter) allow(addr string) bool {
+// hostOf strips the port from a connection address.
+func hostOf(addr string) string {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		host = addr
+		return addr
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	if len(l.limiters) > 10000 {
-		for k, e := range l.limiters {
-			if now.Sub(e.seen) > 10*time.Minute {
-				delete(l.limiters, k)
-			}
-		}
-	}
-	e, ok := l.limiters[host]
-	if !ok {
-		e = &entry{l: rate.NewLimiter(l.rate, l.burst)}
-		l.limiters[host] = e
-	}
-	e.seen = now
-	return e.l.Allow()
+	return host
 }
 
 // throttle rejects when the caller has exhausted the credential budget.
 func (s *Server) throttle(ctx huma.Context) error {
-	if !s.limiter.allow(ctx.RemoteAddr()) {
+	if !s.limiter.Allow(hostOf(ctx.RemoteAddr())) {
 		return apiErr(http.StatusTooManyRequests, "rate_limited", "Too many attempts. Wait a minute and try again.")
 	}
 	return nil

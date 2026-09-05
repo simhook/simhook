@@ -134,6 +134,47 @@ func (h *hookServer) count(event string) int {
 }
 
 // ---------------------------------------------------------------------------
+// The assembled service
+// ---------------------------------------------------------------------------
+
+type harness struct {
+	srv    *httptest.Server
+	mailer *captureMailer
+	pusher *recordingPush
+}
+
+// startApp assembles the real service on the test database, with the mailer
+// and the push provider swapped for recorders.
+func startApp(t *testing.T) *harness {
+	t.Helper()
+	cfg := testutil.Config(t)
+	testutil.Reset(t)
+	mailer := &captureMailer{}
+	pusher := &recordingPush{reject: map[string]bool{}}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	a, err := app.Build(ctx, cfg, log, app.Options{Mailer: mailer, Push: pusher})
+	if err != nil {
+		cancel()
+		t.Fatalf("build: %v", err)
+	}
+	if err := a.Start(ctx); err != nil {
+		cancel()
+		t.Fatalf("start: %v", err)
+	}
+	srv := httptest.NewServer(a.HTTP.Handler())
+	t.Cleanup(func() {
+		srv.Close()
+		stopCtx, c := context.WithTimeout(context.Background(), 10*time.Second)
+		defer c()
+		_ = a.Stop(stopCtx)
+		cancel()
+	})
+	return &harness{srv: srv, mailer: mailer, pusher: pusher}
+}
+
+// ---------------------------------------------------------------------------
 // HTTP helper
 // ---------------------------------------------------------------------------
 
@@ -242,30 +283,8 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 // ---------------------------------------------------------------------------
 
 func TestEndToEnd(t *testing.T) {
-	cfg := testutil.Config(t)
-	testutil.Reset(t)
-	mailer := &captureMailer{}
-	pusher := &recordingPush{reject: map[string]bool{}}
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	a, err := app.Build(ctx, cfg, log, app.Options{Mailer: mailer, Push: pusher})
-	if err != nil {
-		t.Fatalf("build: %v", err)
-	}
-	if err := a.Start(ctx); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	defer func() {
-		stopCtx, c := context.WithTimeout(context.Background(), 10*time.Second)
-		defer c()
-		_ = a.Stop(stopCtx)
-	}()
-	srv := httptest.NewServer(a.HTTP.Handler())
-	defer srv.Close()
-
-	web := &client{t: t, base: srv.URL}
+	h := startApp(t)
+	web := &client{t: t, base: h.srv.URL}
 
 	// Register, verify email, get an API key.
 	r := web.must("POST", "/v1/auth/register", map[string]any{"email": "Dev@Example.com", "password": "hunter2hunter2", "name": "Dev"}, 201)
@@ -278,21 +297,29 @@ func TestEndToEnd(t *testing.T) {
 	}
 	web.must("POST", "/v1/messages", map[string]any{"to": []string{"+15550001"}, "body": "x"}, 403) // unverified
 	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": "000000"}, 400)
-	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": mailer.lastCode(t)}, 200)
+	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": h.mailer.lastCode(t)}, 200)
 
 	r = web.must("POST", "/v1/api-keys", map[string]any{"name": "ci"}, 201)
 	apiKey := str(r.body, "key")
-	if apiKey == "" {
+	keyID := str(r.body, "api_key", "id")
+	if apiKey == "" || keyID == "" {
 		t.Fatalf("no key: %s", r.raw)
 	}
-	dev := &client{t: t, base: srv.URL, apiKey: apiKey}
+	web.must("POST", "/v1/api-keys", map[string]any{"name": "bad", "scopes": []string{"bogus"}}, 422)
+	web.must("PATCH", "/v1/api-keys/"+keyID, map[string]any{"name": "   "}, 422)
+	dev := &client{t: t, base: h.srv.URL, apiKey: apiKey}
 	dev.must("GET", "/v1/api-keys", nil, 401)                                                       // keys cannot manage keys
 	dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+15550001"}, "body": "x"}, 400) // no device yet
 
-	// Pair a phone.
+	// Pair a phone. The dashboard watches the code, not the device list.
 	r = dev.must("POST", "/v1/devices/pairing-codes", nil, 201)
 	code := str(r.body, "code")
-	phone := &client{t: t, base: srv.URL}
+	codeID := str(r.body, "id")
+	r = dev.must("GET", "/v1/devices/pairing-codes/"+codeID, nil, 200)
+	if r.body["consumed"] != false || r.body["device"] != nil {
+		t.Fatalf("fresh code: %s", r.raw)
+	}
+	phone := &client{t: t, base: h.srv.URL}
 	phone.must("POST", "/v1/device/pair", map[string]any{"code": "AAAA-BBBB", "hardware_key": "hw-pixel-0001"}, 400)
 	r = phone.must("POST", "/v1/device/pair", map[string]any{
 		"code": code, "hardware_key": "hw-pixel-0001", "brand": "Pixel", "model": "8", "push_token": "tok-1",
@@ -310,6 +337,10 @@ func TestEndToEnd(t *testing.T) {
 	}
 	phone.must("POST", "/v1/device/pair", map[string]any{"code": code, "hardware_key": "hw-pixel-0002"}, 400) // code consumed
 	phone.must("GET", "/v1/devices", nil, 401)                                                                // device token is not a user
+	r = dev.must("GET", "/v1/devices/pairing-codes/"+codeID, nil, 200)
+	if r.body["consumed"] != true || str(r.body, "device", "id") != deviceID {
+		t.Fatalf("used code should name the phone: %s", r.raw)
+	}
 
 	// Subscribe a webhook.
 	hooks := newHookServer(t)
@@ -319,6 +350,7 @@ func TestEndToEnd(t *testing.T) {
 	hooks.secret = str(r.body, "secret")
 	webhookID := str(r.body, "webhook", "id")
 	dev.must("POST", "/v1/webhooks", map[string]any{"url": "ftp://x", "events": []string{"ping"}}, 422)
+	dev.must("GET", "/v1/webhooks/deliveries?event=foo", nil, 422)
 	dev.must("POST", "/v1/webhooks/"+webhookID+"/test", nil, 202)
 	waitFor(t, "ping delivery", func() bool { return hooks.count("ping") == 1 })
 
@@ -336,12 +368,12 @@ func TestEndToEnd(t *testing.T) {
 	if len(msgIDs) != 2 {
 		t.Fatalf("duplicates should collapse to 2 ids: %s", r.raw)
 	}
-	waitFor(t, "2 pushes", func() bool { return len(pusher.sends()) == 2 })
+	waitFor(t, "2 pushes", func() bool { return len(h.pusher.sends()) == 2 })
 	waitFor(t, "batch processing", func() bool {
 		b := dev.must("GET", "/v1/batches/"+batchID, nil, 200)
 		return str(b.body, "batch", "status") == "processing" && num(b.body, "batch", "dispatched_count") == 2
 	})
-	if got := pusher.sends()[0].Data["to"]; got != "+14155550123" {
+	if got := h.pusher.sends()[0].Data["to"]; got != "+14155550123" {
 		t.Fatalf("push recipient: %s", got)
 	}
 
@@ -363,6 +395,10 @@ func TestEndToEnd(t *testing.T) {
 	waitFor(t, "status webhooks", func() bool {
 		return hooks.count("message.sent") == 1 && hooks.count("message.delivered") == 1 && hooks.count("message.failed") == 1
 	})
+	r = dev.must("GET", "/v1/stats", nil, 200)
+	if num(r.body, "sent") != 1 {
+		t.Fatalf("only the message the carrier took counts as sent: %s", r.raw)
+	}
 
 	// Inbound, with de-duplication by fingerprint.
 	in := map[string]any{"sender": "+19995550100", "body": "reply", "received_at": time.Now().UTC().Format(time.RFC3339), "fingerprint": "fp-1"}
@@ -408,8 +444,19 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("a rejected send must not count: %s", r.raw)
 	}
 
+	// A send scheduled for tomorrow counts against tomorrow, not today.
+	tomorrow := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	r = dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+14155552000"}, "body": "later", "scheduled_at": tomorrow}, 202)
+	if str(r.body, "batch", "scheduled_at") == "" || str(r.body, "batch", "status") != "queued" {
+		t.Fatalf("scheduled send: %s", r.raw)
+	}
+	r = web.must("GET", "/v1/auth/me", nil, 200)
+	if num(r.body, "usage", "sent_today") != 27 {
+		t.Fatalf("a scheduled send must not count today: %s", r.raw)
+	}
+
 	// Invalid push token fails the message and invalidates the device token.
-	pusher.reject["tok-1"] = true
+	h.pusher.reject["tok-1"] = true
 	r = dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+14155551000"}, "body": "x"}, 202)
 	waitFor(t, "push rejection recorded", func() bool {
 		b := dev.must("GET", "/v1/batches/"+str(r.body, "batch", "id"), nil, 200)
@@ -437,4 +484,42 @@ func TestEndToEnd(t *testing.T) {
 	if hooks.badSig != 0 {
 		t.Fatalf("%d deliveries had bad signatures", hooks.badSig)
 	}
+}
+
+// TestCredentialHardening covers the two ways a credential could be guessed:
+// a six-digit code, and a password for a known address.
+func TestCredentialHardening(t *testing.T) {
+	h := startApp(t)
+	web := &client{t: t, base: h.srv.URL}
+
+	r := web.must("POST", "/v1/auth/register", map[string]any{"email": "lock@example.com", "password": "hunter2hunter2"}, 201)
+	web.cookie = r.cookie
+	real := h.mailer.lastCode(t)
+	wrong := "000000"
+	if wrong == real {
+		wrong = "111111"
+	}
+	for i := 0; i < 5; i++ {
+		web.must("POST", "/v1/auth/verify-email", map[string]any{"code": wrong}, 400)
+	}
+	// Five wrong guesses burn the code; even the right one no longer works.
+	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": real}, 400)
+	web.must("POST", "/v1/auth/verify-email/send", nil, 202)
+	fresh := h.mailer.lastCode(t)
+	if fresh == real {
+		t.Fatal("a resend must mint a new code")
+	}
+	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": fresh}, 200)
+
+	// Sign-in is throttled per account, right or wrong, whatever the caller's address.
+	other := &client{t: t, base: h.srv.URL}
+	for i := 0; i < 5; i++ {
+		other.must("POST", "/v1/auth/login", map[string]any{"email": "lock@example.com", "password": "not-the-password"}, 401)
+	}
+	r = other.do("POST", "/v1/auth/login", map[string]any{"email": "lock@example.com", "password": "hunter2hunter2"})
+	if r.status != 429 || str(r.body, "code") != "rate_limited" {
+		t.Fatalf("sixth attempt within a minute should be refused: %d %s", r.status, r.raw)
+	}
+	// Another account is unaffected.
+	other.must("POST", "/v1/auth/login", map[string]any{"email": "nobody@example.com", "password": "hunter2hunter2"}, 401)
 }

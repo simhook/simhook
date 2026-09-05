@@ -64,11 +64,19 @@ type PairingCode struct {
 	CreatedAt          time.Time  `db:"created_at"`
 }
 
-// CreatePairingCode stores a hashed code.
-func (s *Store) CreatePairingCode(ctx context.Context, userID uuid.UUID, hash []byte, expires time.Time) error {
-	_, err := s.q.Exec(ctx, `insert into pairing_codes (user_id, code_hash, expires_at) values ($1, $2, $3)`,
-		userID, hash, expires)
-	return err
+// CreatePairingCode stores a hashed code and returns its id.
+func (s *Store) CreatePairingCode(ctx context.Context, userID uuid.UUID, hash []byte, expires time.Time) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := s.q.QueryRow(ctx, `insert into pairing_codes (user_id, code_hash, expires_at) values ($1, $2, $3) returning id`,
+		userID, hash, expires).Scan(&id)
+	return id, err
+}
+
+// GetUserPairingCode fetches one of the user's codes, used or not.
+func (s *Store) GetUserPairingCode(ctx context.Context, userID, id uuid.UUID) (PairingCode, error) {
+	return one[PairingCode](s.q.Query(ctx, `
+		select id, user_id, code_hash, expires_at, consumed_at, consumed_by_device_id, created_at
+		from pairing_codes where id = $1 and user_id = $2`, id, userID))
 }
 
 // GetLivePairingCode looks up an unconsumed, unexpired code.
@@ -112,7 +120,8 @@ type UpsertDeviceParams struct {
 }
 
 // UpsertDevice creates a device, or revives and updates the row for the
-// same hardware on the same account.
+// same hardware on the same account. A revived row starts over with the
+// settings a new phone gets; a live row keeps its name and settings.
 func (s *Store) UpsertDevice(ctx context.Context, p UpsertDeviceParams) (Device, error) {
 	return one[Device](s.q.Query(ctx, `
 		insert into devices (id, user_id, name, hardware_key, manufacturer, brand, model, build_id,
@@ -135,6 +144,10 @@ func (s *Store) UpsertDevice(ctx context.Context, p UpsertDeviceParams) (Device,
 			push_token_invalidated_at = null,
 			push_token_invalid_reason = null,
 			enabled = true,
+			receive_enabled = case when devices.deleted_at is null then devices.receive_enabled else true end,
+			send_delay_seconds = case when devices.deleted_at is null then devices.send_delay_seconds else 5 end,
+			heartbeat_interval_minutes = case when devices.deleted_at is null then devices.heartbeat_interval_minutes else excluded.heartbeat_interval_minutes end,
+			preferred_sim_subscription_id = case when devices.deleted_at is null then devices.preferred_sim_subscription_id else null end,
 			deleted_at = null,
 			is_default = devices.is_default or excluded.is_default
 		returning `+deviceCols,
@@ -244,31 +257,41 @@ type HeartbeatParams struct {
 	Sims           json.RawMessage
 }
 
+type heartbeatRow struct {
+	Device
+	WasOnline bool `db:"was_online"`
+}
+
 // RecordHeartbeat stores a check-in and returns the device plus whether it
-// was offline before this beat.
+// was online before this beat. One statement with a row lock, so two
+// check-ins that race see each other and only the first reports "was
+// offline".
 func (s *Store) RecordHeartbeat(ctx context.Context, id uuid.UUID, p HeartbeatParams) (Device, bool, error) {
-	var wasOnline bool
-	if err := s.q.QueryRow(ctx, `select online from devices where id = $1 and deleted_at is null`, id).Scan(&wasOnline); err != nil {
-		return Device{}, false, notFoundIfNoRows(err)
-	}
-	d, err := one[Device](s.q.Query(ctx, `
-		update devices set
+	row, err := one[heartbeatRow](s.q.Query(ctx, `
+		with prev as (
+			select online as was_online from devices where id = $1 and deleted_at is null for update
+		)
+		update devices d set
 			last_heartbeat_at = now(),
 			online = true,
-			push_token = coalesce($2, push_token),
-			push_token_updated_at = case when $2::text is null or $2 = push_token then push_token_updated_at else now() end,
-			push_token_invalidated_at = case when $2::text is null then push_token_invalidated_at else null end,
-			push_token_invalid_reason = case when $2::text is null then push_token_invalid_reason else null end,
-			app_version_name = coalesce($3, app_version_name),
-			app_version_code = coalesce($4, app_version_code),
-			os_version = coalesce($5, os_version),
-			os_api_level = coalesce($6, os_api_level),
-			telemetry = coalesce($7, telemetry),
-			sims = coalesce($8, sims)
-		where id = $1
-		returning `+deviceCols,
+			push_token = coalesce($2, d.push_token),
+			push_token_updated_at = case when $2::text is null or $2 = d.push_token then d.push_token_updated_at else now() end,
+			push_token_invalidated_at = case when $2::text is null then d.push_token_invalidated_at else null end,
+			push_token_invalid_reason = case when $2::text is null then d.push_token_invalid_reason else null end,
+			app_version_name = coalesce($3, d.app_version_name),
+			app_version_code = coalesce($4, d.app_version_code),
+			os_version = coalesce($5, d.os_version),
+			os_api_level = coalesce($6, d.os_api_level),
+			telemetry = coalesce($7, d.telemetry),
+			sims = coalesce($8, d.sims)
+		from prev
+		where d.id = $1
+		returning `+prefixCols("d.", deviceCols)+`, prev.was_online`,
 		id, p.PushToken, p.AppVersionName, p.AppVersionCode, p.OSVersion, p.OSAPILevel, p.Telemetry, p.Sims))
-	return d, wasOnline, err
+	if err != nil {
+		return Device{}, false, err
+	}
+	return row.Device, row.WasOnline, nil
 }
 
 // SetPushToken records a fresh token for a device.

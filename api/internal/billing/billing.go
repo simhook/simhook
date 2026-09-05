@@ -61,11 +61,12 @@ func (s *Service) CheckBatchSize(limits store.Limits, n int) error {
 	return nil
 }
 
-// ReserveSends counts n sends against the day and month and returns a
-// LimitError if either limit is exceeded. Run it inside the send transaction
-// so a rejected reservation rolls back.
-func (s *Service) ReserveSends(ctx context.Context, tx *store.Store, userID uuid.UUID, limits store.Limits, n int) error {
-	day, month, err := tx.ReserveSends(ctx, userID, n, time.Now())
+// ReserveSends counts n sends against the day and month that contain at
+// (the scheduled time, or now) and returns a LimitError if either limit is
+// exceeded. Run it inside the send transaction so a rejected reservation
+// rolls back.
+func (s *Service) ReserveSends(ctx context.Context, tx *store.Store, userID uuid.UUID, limits store.Limits, n int, at time.Time) error {
+	day, month, err := tx.ReserveSends(ctx, userID, n, at)
 	if err != nil {
 		return err
 	}

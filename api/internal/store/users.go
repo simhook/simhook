@@ -114,8 +114,13 @@ func (s *Store) CreateUserToken(ctx context.Context, userID uuid.UUID, kind stri
 	return err
 }
 
-// ConsumeUserToken burns a code and returns its owner. Returns ErrNotFound if
-// the code is unknown, used, or expired.
+// maxCodeAttempts is how many wrong guesses a one-time code survives.
+const maxCodeAttempts = 5
+
+// ConsumeUserToken burns a code. Returns ErrNotFound if the code is unknown,
+// used, or expired. A wrong guess is counted against the user's live code of
+// that kind, and the code is burned after maxCodeAttempts, so a six-digit
+// code cannot be walked.
 func (s *Store) ConsumeUserToken(ctx context.Context, userID uuid.UUID, kind string, hash []byte) error {
 	tag, err := s.q.Exec(ctx, `
 		update user_tokens set consumed_at = now()
@@ -124,10 +129,19 @@ func (s *Store) ConsumeUserToken(ctx context.Context, userID uuid.UUID, kind str
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+	if tag.RowsAffected() == 1 {
+		return nil
 	}
-	return nil
+	_, err = s.q.Exec(ctx, `
+		update user_tokens set
+			attempts = attempts + 1,
+			consumed_at = case when attempts + 1 >= $3 then now() else consumed_at end
+		where user_id = $1 and kind = $2 and consumed_at is null and expires_at > now()`,
+		userID, kind, maxCodeAttempts)
+	if err != nil {
+		return err
+	}
+	return ErrNotFound
 }
 
 // ---------------------------------------------------------------------------
@@ -263,8 +277,8 @@ func (s *Store) DeleteAPIKey(ctx context.Context, userID, id uuid.UUID) error {
 	return nil
 }
 
-// TouchAPIKey records a use. Called asynchronously; failures are ignored.
-func (s *Store) TouchAPIKey(ctx context.Context, id uuid.UUID) error {
-	_, err := s.q.Exec(ctx, `update api_keys set last_used_at = now(), use_count = use_count + 1 where id = $1`, id)
+// TouchAPIKey records n uses. Called asynchronously; failures are ignored.
+func (s *Store) TouchAPIKey(ctx context.Context, id uuid.UUID, n int) error {
+	_, err := s.q.Exec(ctx, `update api_keys set last_used_at = now(), use_count = use_count + $2 where id = $1`, id, n)
 	return err
 }

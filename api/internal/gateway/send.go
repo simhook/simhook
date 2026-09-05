@@ -142,10 +142,12 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 
 	sendDelay := time.Duration(device.SendDelaySeconds) * time.Second
 	waves := planWaves(len(recipients), s.cfg.DispatchWaveSize, sendDelay, base)
+	// When the phone should be done, given its pacing. Only omitted when the
+	// send is already expected to be over, which a zero delay makes possible.
 	var estimated *time.Time
-	if last := waves[len(waves)-1]; len(waves) > 1 || last.due.After(now) {
-		t := last.due.Add(time.Duration(last.end-last.start) * sendDelay)
-		estimated = &t
+	last := waves[len(waves)-1]
+	if finish := last.due.Add(time.Duration(last.end-last.start) * sendDelay); finish.After(now) {
+		estimated = &finish
 	}
 	var scheduled *time.Time
 	if base.After(now) {
@@ -158,7 +160,9 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 	}
 	var batch store.Batch
 	err = s.st.Tx(ctx, func(tx pgx.Tx, st *store.Store) error {
-		if err := s.billing.ReserveSends(ctx, st, user.ID, limits, len(recipients)); err != nil {
+		// Quota belongs to the day the messages go out, so a send scheduled
+		// for tomorrow counts against tomorrow.
+		if err := s.billing.ReserveSends(ctx, st, user.ID, limits, len(recipients), base); err != nil {
 			return err
 		}
 		var err error
@@ -327,7 +331,11 @@ func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 		if _, err := s.st.ApplyBatchTransition(ctx, args.BatchID, store.StatusQueued, store.StatusDispatched, n); err != nil {
 			return err
 		}
-		_ = s.st.AddDeviceCounts(ctx, device.ID, n, 0)
+	}
+	// The device is marked before the messages fail, so anyone who sees a
+	// failed batch also sees why on the device.
+	if tokenInvalid {
+		_ = s.st.InvalidatePushToken(ctx, device.ID, "rejected by push service")
 	}
 	if len(failedIDs) > 0 {
 		msg := "The push service rejected the message."
@@ -339,9 +347,6 @@ func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 		if err := s.failQueued(ctx, args.BatchID, failedIDs, CodePushRejected, msg, now); err != nil {
 			return err
 		}
-	}
-	if tokenInvalid {
-		_ = s.st.InvalidatePushToken(ctx, device.ID, "rejected by push service")
 	}
 	return nil
 }

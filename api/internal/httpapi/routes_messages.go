@@ -139,7 +139,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "send-message", Method: http.MethodPost, Path: "/v1/messages",
-		Summary: "Send an SMS", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
+		Extensions: scoped(auth.ScopeSend),
+		Summary:    "Send an SMS", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
 		Description: "Queues one text to one or more recipients from a phone on the account. Acceptance is not delivery: follow the batch or subscribe to webhooks for the outcome. Every recipient counts as one message against the plan.",
 	}, func(ctx context.Context, in *sendInput) (*sendOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeSend)
@@ -170,7 +171,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-messages", Method: http.MethodGet, Path: "/v1/messages",
-		Summary: "List messages", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeRead),
+		Summary:    "List messages", Tags: tags, Security: securityUser,
 		Description: "Sent and received messages across the account, newest first, with delivery state on each. To poll for new messages, request order=asc with a from bound and follow next_cursor.",
 	}, func(ctx context.Context, in *listMessagesInput) (*messagesOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
@@ -193,7 +195,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-message", Method: http.MethodGet, Path: "/v1/messages/{id}",
-		Summary: "Get a message", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeRead),
+		Summary:    "Get a message", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *messageIDInput) (*messageOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
 		if err != nil {
@@ -214,7 +217,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-batches", Method: http.MethodGet, Path: "/v1/batches",
-		Summary: "List sends", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeRead),
+		Summary:    "List sends", Tags: tags, Security: securityUser,
 		Description: "Every send on the account, newest first, with per-status counts.",
 	}, func(ctx context.Context, in *listBatchesInput) (*batchesOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
@@ -237,7 +241,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-batch", Method: http.MethodGet, Path: "/v1/batches/{id}",
-		Summary: "Get a send", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeRead),
+		Summary:    "Get a send", Tags: tags, Security: securityUser,
 		Description: "The batch plus one message per recipient. Poll this to follow a send.",
 	}, func(ctx context.Context, in *messageIDInput) (*batchOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
@@ -260,7 +265,8 @@ func (s *Server) registerMessages() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-stats", Method: http.MethodGet, Path: "/v1/stats",
-		Summary: "Account totals", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeRead),
+		Summary:    "Account totals", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, _ *struct{}) (*statsOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
 		if err != nil {

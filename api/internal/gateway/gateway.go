@@ -22,6 +22,7 @@ import (
 	"github.com/simhook/simhook/internal/push"
 	"github.com/simhook/simhook/internal/secrets"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/validate"
 	"github.com/simhook/simhook/internal/webhooks"
 )
 
@@ -35,12 +36,7 @@ var (
 )
 
 // ValidationError is a request problem tied to one field.
-type ValidationError struct {
-	Field   string
-	Message string
-}
-
-func (e *ValidationError) Error() string { return e.Field + ": " + e.Message }
+type ValidationError = validate.Error
 
 // Enqueuer is the subset of the job client the service needs.
 type Enqueuer interface {
@@ -73,17 +69,47 @@ func (s *Service) SetQueue(q Enqueuer) { s.jobs = q }
 
 const pairingCodeTTL = 10 * time.Minute
 
+// PairingCode is a minted code, returned once with its text.
+type PairingCode struct {
+	ID        uuid.UUID
+	Code      string
+	ExpiresAt time.Time
+}
+
 // CreatePairingCode mints a code the phone exchanges for a device token.
-func (s *Service) CreatePairingCode(ctx context.Context, userID uuid.UUID) (code string, expires time.Time, err error) {
+func (s *Service) CreatePairingCode(ctx context.Context, userID uuid.UUID) (PairingCode, error) {
 	code, hash, err := secrets.NewPairingCode()
 	if err != nil {
-		return "", time.Time{}, err
+		return PairingCode{}, err
 	}
-	expires = time.Now().Add(pairingCodeTTL)
-	if err := s.st.CreatePairingCode(ctx, userID, hash, expires); err != nil {
-		return "", time.Time{}, err
+	expires := time.Now().Add(pairingCodeTTL)
+	id, err := s.st.CreatePairingCode(ctx, userID, hash, expires)
+	if err != nil {
+		return PairingCode{}, err
 	}
-	return code, expires, nil
+	return PairingCode{ID: id, Code: code, ExpiresAt: expires}, nil
+}
+
+// PairingStatus reports whether a code has been used and, if so, by which
+// phone, so the dashboard can wait for a pairing without guessing from the
+// device list.
+func (s *Service) PairingStatus(ctx context.Context, userID, id uuid.UUID) (store.PairingCode, *store.Device, error) {
+	pc, err := s.st.GetUserPairingCode(ctx, userID, id)
+	if err != nil {
+		return store.PairingCode{}, nil, err
+	}
+	if pc.ConsumedByDeviceID == nil {
+		return pc, nil, nil
+	}
+	d, err := s.st.GetUserDevice(ctx, userID, *pc.ConsumedByDeviceID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// Paired, then unpaired again before anyone looked.
+			return pc, nil, nil
+		}
+		return store.PairingCode{}, nil, err
+	}
+	return pc, &d, nil
 }
 
 // PairInput is what the phone sends with a code.

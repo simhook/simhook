@@ -17,7 +17,7 @@ type createWebhookInput struct {
 	Body struct {
 		Name   *string  `json:"name,omitempty" maxLength:"64"`
 		URL    string   `json:"url" format:"uri" maxLength:"2048" doc:"HTTPS endpoint that receives POSTs."`
-		Events []string `json:"events" minItems:"1" doc:"Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline."`
+		Events []string `json:"events" minItems:"1" doc:"Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline, ping."`
 	}
 }
 
@@ -69,7 +69,7 @@ type deliveryOutput struct {
 type listDeliveriesInput struct {
 	WebhookID string `query:"webhook_id"`
 	Status    string `query:"status" enum:"pending,delivered,retrying,failed"`
-	Event     string `query:"event"`
+	Event     string `query:"event" enum:"message.received,message.sent,message.delivered,message.failed,message.unknown,device.online,device.offline,ping"`
 	From      string `query:"from"`
 	To        string `query:"to"`
 	Cursor    string `query:"cursor"`
@@ -88,8 +88,9 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "create-webhook", Method: http.MethodPost, Path: "/v1/webhooks",
-		Summary: "Create a webhook", Tags: tags, DefaultStatus: http.StatusCreated, Security: securityUser,
-		Description: "Subscribes a URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=<unix>,v1=<hex hmac-sha256 of \"<t>.<body>\">. Respond 2xx within 30 seconds; other responses are retried over a day.",
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Create a webhook", Tags: tags, DefaultStatus: http.StatusCreated, Security: securityUser,
+		Description: "Subscribes an https URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=<unix>,v1=<hex hmac-sha256 of \"<t>.<body>\">. Respond 2xx within 30 seconds; other responses are retried for about two days.",
 	}, func(ctx context.Context, in *createWebhookInput) (*webhookCreatedOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
@@ -107,7 +108,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-webhooks", Method: http.MethodGet, Path: "/v1/webhooks",
-		Summary: "List webhooks", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "List webhooks", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, _ *struct{}) (*webhooksOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
@@ -124,7 +126,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-deliveries", Method: http.MethodGet, Path: "/v1/webhooks/deliveries",
-		Summary: "List deliveries", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "List deliveries", Tags: tags, Security: securityUser,
 		Description: "Delivery attempts across every webhook on the account, newest first, including webhooks since deleted.",
 	}, func(ctx context.Context, in *listDeliveriesInput) (*deliveriesOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
@@ -167,7 +170,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-delivery", Method: http.MethodGet, Path: "/v1/webhooks/deliveries/{id}",
-		Summary: "Get a delivery", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Get a delivery", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *webhookIDInput) (*deliveryOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
@@ -188,7 +192,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-webhook", Method: http.MethodGet, Path: "/v1/webhooks/{id}",
-		Summary: "Get a webhook", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Get a webhook", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *webhookIDInput) (*webhookOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
@@ -209,7 +214,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "update-webhook", Method: http.MethodPatch, Path: "/v1/webhooks/{id}",
-		Summary: "Update a webhook", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Update a webhook", Tags: tags, Security: securityUser,
 	}, func(ctx context.Context, in *updateWebhookInput) (*webhookOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
@@ -230,7 +236,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "rotate-webhook-secret", Method: http.MethodPost, Path: "/v1/webhooks/{id}/rotate-secret",
-		Summary: "Rotate the signing secret", Tags: tags, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Rotate the signing secret", Tags: tags, Security: securityUser,
 		Description: "Deliveries queued from now on are signed with the new secret.",
 	}, func(ctx context.Context, in *webhookIDInput) (*secretOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
@@ -252,7 +259,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "test-webhook", Method: http.MethodPost, Path: "/v1/webhooks/{id}/test",
-		Summary: "Send a test event", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Send a test event", Tags: tags, DefaultStatus: http.StatusAccepted, Security: securityUser,
 		Description: "Queues a ping delivery so you can check your endpoint and signature verification.",
 	}, func(ctx context.Context, in *webhookIDInput) (*deliveryOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
@@ -274,7 +282,8 @@ func (s *Server) registerWebhooks() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "delete-webhook", Method: http.MethodDelete, Path: "/v1/webhooks/{id}",
-		Summary: "Delete a webhook", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Extensions: scoped(auth.ScopeWebhooks),
+		Summary:    "Delete a webhook", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
 	}, func(ctx context.Context, in *webhookIDInput) (*emptyOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeWebhooks)
 		if err != nil {
