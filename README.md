@@ -27,7 +27,7 @@ cp api/.env.example api/.env      # fill SIMHOOK_SECRET_KEY
 cd api && go run ./cmd/simhook migrate up && go run ./cmd/simhook serve
 ```
 
-The Android app builds with the Gradle wrapper. Push needs a Firebase config at `android/app/google-services.json`; without it the app still builds and runs, but the server cannot wake the phone.
+The Android app builds with the Gradle wrapper. Push needs a Firebase config at `android/app/src/debug/google-services.json` (the development project; release builds use `src/release/`); without it the app still builds and runs, but the server cannot wake the phone.
 
 ```
 cd android && ./gradlew assembleDebug
