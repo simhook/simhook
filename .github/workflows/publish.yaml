@@ -44,6 +44,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}..." build
       - run: pnpm -r --filter "./${{ steps.which.outputs.dir }}" test
+      # pnpm, not npm: it rewrites the workspace: version of @simhook/sdk in
+      # the MCP package into the real version at publish time.
       - name: Publish
         working-directory: ${{ steps.which.outputs.dir }}
-        run: npm publish --provenance --access public
+        run: pnpm publish --provenance --access public --no-git-checks
