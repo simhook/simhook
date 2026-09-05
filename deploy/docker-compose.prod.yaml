@@ -27,8 +27,8 @@ services:
   api:
     image: ${API_IMAGE:-ghcr.io/simhook/api:latest}
     build:
-      context: ..
-      dockerfile: api/Dockerfile
+      context: ../api
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file: api.env
     environment:
