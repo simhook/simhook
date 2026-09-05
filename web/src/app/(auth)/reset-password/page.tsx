@@ -10,8 +10,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/field";
+import { Turnstile } from "@/components/turnstile";
 import { errorMessage } from "@/lib/api";
-import { useAuthMutations } from "@/lib/queries";
+import { useAuthConfig, useAuthMutations } from "@/lib/queries";
 
 const requestSchema = z.object({ email: z.string().email("Enter a valid email") });
 const resetSchema = z.object({
@@ -22,9 +23,13 @@ const resetSchema = z.object({
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const config = useAuthConfig();
   const { requestReset, resetPassword } = useAuthMutations();
   const [stage, setStage] = useState<"request" | "reset">("request");
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState<string | null>("");
+  const [resetKey, setResetKey] = useState(0);
+  const siteKey = config.data?.turnstile_site_key ?? "";
 
   const requestForm = useForm<z.infer<typeof requestSchema>>({ resolver: zodResolver(requestSchema), defaultValues: { email: "" } });
   const resetForm = useForm<z.infer<typeof resetSchema>>({
@@ -37,13 +42,20 @@ export default function ResetPasswordPage() {
       <form
         className="grid gap-4"
         onSubmit={requestForm.handleSubmit((v) =>
-          requestReset.mutate(v, {
-            onSuccess: () => {
-              setEmail(v.email);
-              resetForm.setValue("email", v.email);
-              setStage("reset");
+          requestReset.mutate(
+            { ...v, turnstile_token: siteKey && token ? token : undefined },
+            {
+              onSuccess: () => {
+                setEmail(v.email);
+                resetForm.setValue("email", v.email);
+                setStage("reset");
+              },
+              onError: () => {
+                setToken("");
+                setResetKey((k) => k + 1);
+              },
             },
-          }),
+          ),
         )}
       >
         <div>
@@ -53,8 +65,9 @@ export default function ResetPasswordPage() {
         <Field label="Email" htmlFor="email" error={requestForm.formState.errors.email?.message}>
           <Input id="email" type="email" autoComplete="email" {...requestForm.register("email")} />
         </Field>
+        {siteKey ? <Turnstile siteKey={siteKey} onToken={setToken} resetKey={resetKey} /> : null}
         {requestReset.isError ? <p className="text-sm text-destructive">{errorMessage(requestReset.error)}</p> : null}
-        <Button type="submit" disabled={requestReset.isPending}>
+        <Button type="submit" disabled={requestReset.isPending || config.isPending || (!!siteKey && token === "")}>
           {requestReset.isPending ? "Sending…" : "Send code"}
         </Button>
         <p className="text-center text-sm text-muted-foreground">

@@ -5,6 +5,7 @@ export type { components, paths };
 
 export type APIError = components["schemas"]["APIError"];
 export type APIKey = components["schemas"]["APIKey"];
+export type AuthConfigOutputBody = components["schemas"]["AuthConfigOutputBody"];
 export type Batch = components["schemas"]["Batch"];
 export type BatchOutputBody = components["schemas"]["BatchOutputBody"];
 export type BatchesOutputBody = components["schemas"]["BatchesOutputBody"];

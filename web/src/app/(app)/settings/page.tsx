@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import type { User } from "@simhook/contracts";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,9 @@ function ProfileCard({ user }: { user: User }) {
             ) : null}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">Member since {absoluteTime(user.created_at)}.</p>
+        <p className="text-xs text-muted-foreground">
+          Member since {absoluteTime(user.created_at)}.{user.google_linked ? " Signs in with Google." : ""}
+        </p>
       </CardContent>
     </Card>
   );
@@ -147,8 +150,21 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Password</CardTitle>
-            <CardDescription>At least 10 characters.</CardDescription>
+            <CardDescription>
+              {user.has_password ? "At least 10 characters." : "This account has no password and signs in with Google."}
+            </CardDescription>
           </CardHeader>
+          {!user.has_password ? (
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                To add one, use{" "}
+                <Link href="/reset-password" className="text-foreground underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+                  Forgot password
+                </Link>{" "}
+                on the sign-in page: a code goes to your email and sets it.
+              </p>
+            </CardContent>
+          ) : (
           <CardContent className="grid gap-4">
             <Field label="Current password" htmlFor="current">
               <Input id="current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
@@ -177,6 +193,7 @@ export default function SettingsPage() {
               </Button>
             </div>
           </CardContent>
+          )}
         </Card>
 
         <Card className="lg:col-span-2">

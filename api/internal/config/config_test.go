@@ -83,3 +83,19 @@ func TestSessionCapCoversIdleWindow(t *testing.T) {
 		t.Fatal("a zero idle window should be refused")
 	}
 }
+
+func TestOptionalFeaturesNeedBothKeys(t *testing.T) {
+	if _, err := load(t, map[string]string{"SIMHOOK_GOOGLE_CLIENT_ID": "id"}); err == nil {
+		t.Fatal("a Google client id without its secret should be refused")
+	}
+	if _, err := load(t, map[string]string{"SIMHOOK_TURNSTILE_SECRET_KEY": "s"}); err == nil {
+		t.Fatal("a Turnstile secret without its site key should be refused")
+	}
+	cfg, err := load(t, map[string]string{
+		"SIMHOOK_GOOGLE_CLIENT_ID": "id", "SIMHOOK_GOOGLE_CLIENT_SECRET": "secret",
+		"SIMHOOK_TURNSTILE_SITE_KEY": "site", "SIMHOOK_TURNSTILE_SECRET_KEY": "s",
+	})
+	if err != nil || !cfg.GoogleEnabled() || !cfg.TurnstileEnabled() {
+		t.Fatalf("both pairs should turn the features on: %v", err)
+	}
+}

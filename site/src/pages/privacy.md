@@ -16,7 +16,7 @@ simhook relays text messages through your own phone. To do that it has to hold s
 
 ## What we do not do
 
-- No analytics or tracking on this site, in the dashboard, or in the app. No advertising, no third-party scripts.
+- No analytics or tracking on this site, in the dashboard, or in the app. No advertising. The one third-party script is Cloudflare Turnstile on the sign-in, sign-up, and password reset forms, which tells people from bots; it may set a cookie of its own to do that.
 - No reading of your messages by people, except when you ask for help with a specific one, or when abuse is reported.
 - No selling or sharing of your data. It is used to run the service and for nothing else.
 
@@ -25,7 +25,8 @@ simhook relays text messages through your own phone. To do that it has to hold s
 - **Hetzner** hosts the servers.
 - **Resend** sends the emails the service needs: verification, password reset, and notices about your account.
 - **Google Firebase Cloud Messaging** delivers pushes to your phone. A push carries only a nudge to check in, never message content.
-- **Cloudflare** sits in front of the site and the API and sees the traffic in transit.
+- **Google** is involved if you sign in with Google: it tells us your Google account id, email address, name, and picture, and we keep the id to recognise you next time. It learns that you signed in to simhook and nothing else.
+- **Cloudflare** sits in front of the site and the API and sees the traffic in transit, and runs the bot check on the sign-in forms.
 
 ## How long
 

@@ -23,6 +23,7 @@ import (
 	"github.com/simhook/simhook/internal/push"
 	"github.com/simhook/simhook/internal/secrets"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/turnstile"
 	"github.com/simhook/simhook/internal/webhooks"
 )
 
@@ -30,6 +31,10 @@ import (
 type Options struct {
 	Mailer mail.Mailer
 	Push   push.Sender
+	// Google and Turnstile stand in for the real providers in tests. When
+	// nil, each is built from the configuration, or left off.
+	Google    auth.GoogleExchanger
+	Turnstile turnstile.Verifier
 	// Migrate applies schema migrations during Build. Off in tests that
 	// prepare the database themselves.
 	Migrate bool
@@ -140,7 +145,21 @@ func Build(ctx context.Context, cfg *config.Config, log *slog.Logger, opts Optio
 	hooksSvc.SetQueue(queue)
 	gwSvc.SetQueue(queue)
 
-	api := httpapi.New(httpapi.Deps{Config: cfg, Log: log, Auth: authSvc, Billing: billingSvc, Gateway: gwSvc, Webhooks: hooksSvc})
+	googleX := opts.Google
+	if googleX == nil && cfg.GoogleEnabled() {
+		googleX = auth.NewGoogle(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.PublicURL+"/v1/auth/google/callback")
+		log.Info("google sign-in on")
+	}
+	bots := opts.Turnstile
+	if bots == nil && cfg.TurnstileEnabled() {
+		bots = turnstile.New(cfg.TurnstileSecretKey)
+		log.Info("turnstile on")
+	}
+
+	api := httpapi.New(httpapi.Deps{
+		Config: cfg, Log: log, Auth: authSvc, Billing: billingSvc, Gateway: gwSvc, Webhooks: hooksSvc,
+		Box: box, Google: googleX, Turnstile: bots,
+	})
 
 	return &App{
 		Cfg: cfg, Log: log, Pool: pool, Store: st, Auth: authSvc, Billing: billingSvc,

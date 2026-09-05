@@ -9,20 +9,25 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/oauth2"
 
 	"github.com/simhook/simhook/internal/app"
+	"github.com/simhook/simhook/internal/auth"
 	"github.com/simhook/simhook/internal/mail"
 	"github.com/simhook/simhook/internal/push"
 	"github.com/simhook/simhook/internal/secrets"
 	"github.com/simhook/simhook/internal/testutil"
+	"github.com/simhook/simhook/internal/turnstile"
 )
 
 // ---------------------------------------------------------------------------
@@ -166,14 +171,21 @@ func execSQL(t *testing.T, sql string, args ...any) {
 // and the push provider swapped for recorders.
 func startApp(t *testing.T) *harness {
 	t.Helper()
+	return startAppWith(t, app.Options{})
+}
+
+// startAppWith is startApp with further adapters swapped.
+func startAppWith(t *testing.T, opts app.Options) *harness {
+	t.Helper()
 	cfg := testutil.Config(t)
 	testutil.Reset(t)
 	mailer := &captureMailer{}
 	pusher := &recordingPush{reject: map[string]bool{}}
+	opts.Mailer, opts.Push = mailer, pusher
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	a, err := app.Build(ctx, cfg, log, app.Options{Mailer: mailer, Push: pusher})
+	a, err := app.Build(ctx, cfg, log, opts)
 	if err != nil {
 		cancel()
 		t.Fatalf("build: %v", err)
@@ -230,6 +242,7 @@ type client struct {
 	base    string
 	cookie  *http.Cookie // the session cookie
 	flag    *http.Cookie // the readable signed-in flag
+	flow    *http.Cookie // the Google sign-in flow cookie
 	apiKey  string
 	bearer  string
 	headers map[string]string
@@ -239,10 +252,14 @@ type resp struct {
 	status     int
 	body       map[string]any
 	raw        []byte
+	location   string                  // where a redirect points
 	cookie     *http.Cookie            // the session cookie, if set
 	cookies    map[string]*http.Cookie // every cookie set, by name
 	setCookies []*http.Cookie          // every Set-Cookie header, in order
 }
+
+// noFollow never follows redirects, so a test sees them.
+var noFollow = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 // signIn takes the cookies a sign-in response set.
 func (c *client) signIn(r resp) {
@@ -281,6 +298,9 @@ func (c *client) do(method, path string, in any) resp {
 	if c.flag != nil {
 		req.AddCookie(&http.Cookie{Name: c.flag.Name, Value: c.flag.Value})
 	}
+	if c.flow != nil {
+		req.AddCookie(&http.Cookie{Name: c.flow.Name, Value: c.flow.Value})
+	}
 	if c.apiKey != "" {
 		req.Header.Set("X-Api-Key", c.apiKey)
 	}
@@ -290,13 +310,13 @@ func (c *client) do(method, path string, in any) resp {
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := noFollow.Do(req)
 	if err != nil {
 		c.t.Fatalf("%s %s: %v", method, path, err)
 	}
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(res.Body)
-	out := resp{status: res.StatusCode, raw: raw, cookies: map[string]*http.Cookie{}}
+	out := resp{status: res.StatusCode, raw: raw, cookies: map[string]*http.Cookie{}, location: res.Header.Get("Location")}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &out.body)
 	}
@@ -886,4 +906,209 @@ func TestSessions(t *testing.T) {
 		t.Fatalf("logout with a dead cookie: %v", r.setCookies)
 	}
 	web.must("GET", "/v1/auth/me", nil, 401)
+}
+
+// fakeGoogle stands in for Google: a code names an identity.
+type fakeGoogle struct {
+	mu         sync.Mutex
+	identities map[string]auth.GoogleIdentity
+	verifiers  []string
+}
+
+func (g *fakeGoogle) AuthURL(state, verifier string) string {
+	return "https://accounts.google.example/o/oauth2/v2/auth?client_id=test&state=" + state + "&code_challenge=" + oauth2.S256ChallengeFromVerifier(verifier)
+}
+
+func (g *fakeGoogle) Exchange(_ context.Context, code, verifier string) (auth.GoogleIdentity, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.verifiers = append(g.verifiers, verifier)
+	id, ok := g.identities[code]
+	if !ok {
+		return auth.GoogleIdentity{}, fmt.Errorf("unknown code %q", code)
+	}
+	return id, nil
+}
+
+// googleStart begins the flow and returns the state Google would echo back.
+func googleStart(t *testing.T, c *client, next string) (state string) {
+	t.Helper()
+	r := c.do("GET", "/v1/auth/google/start?next="+url.QueryEscape(next), nil)
+	if r.status != 302 || !strings.HasPrefix(r.location, "https://accounts.google.example/") {
+		t.Fatalf("start: %d %s %s", r.status, r.location, r.raw)
+	}
+	u, err := url.Parse(r.location)
+	if err != nil || u.Query().Get("state") == "" || u.Query().Get("code_challenge") == "" {
+		t.Fatalf("the auth URL carries the state and the PKCE challenge: %s", r.location)
+	}
+	c.flow = r.cookies["simhook_google"]
+	if c.flow == nil || !c.flow.HttpOnly || c.flow.Path != "/v1/auth/google" {
+		t.Fatalf("the flow cookie is httpOnly and scoped to the flow: %v", r.setCookies)
+	}
+	return u.Query().Get("state")
+}
+
+// TestGoogleSignIn runs the code flow against a stand-in Google and checks
+// what happens to accounts on the way in.
+func TestGoogleSignIn(t *testing.T) {
+	google := &fakeGoogle{identities: map[string]auth.GoogleIdentity{
+		"new":        {Sub: "g-new", Email: "New@Example.com", EmailVerified: true, Name: "New Person", Picture: "https://lh3.example/p.png"},
+		"squat":      {Sub: "g-squat", Email: "squat@example.com", EmailVerified: true},
+		"keep":       {Sub: "g-keep", Email: "keep@example.com", EmailVerified: true},
+		"unverified": {Sub: "g-unv", Email: "unverified@example.com", EmailVerified: false},
+		"unvsquat":   {Sub: "g-unv2", Email: "squat@example.com", EmailVerified: false},
+	}}
+	h := startAppWith(t, app.Options{Google: google})
+	web := &client{t: t, base: h.srv.URL}
+
+	r := web.must("GET", "/v1/auth/config", nil, 200)
+	if r.body["google_sign_in"] != true || r.body["turnstile_site_key"] != "" {
+		t.Fatalf("config: %s", r.raw)
+	}
+
+	// A new person: the account is created, verified because Google vouched
+	// for the address, and signed in, landing where they were going.
+	state := googleStart(t, web, "/devices?x=1")
+	r = web.do("GET", "/v1/auth/google/callback?code=new&state="+state, nil)
+	if r.status != 302 || r.location != "http://localhost:3000/devices?x=1" {
+		t.Fatalf("callback: %d %s %s", r.status, r.location, r.raw)
+	}
+	web.signIn(r)
+	if c := r.cookies["simhook_google"]; c == nil || c.MaxAge >= 0 {
+		t.Fatalf("the flow cookie is spent: %v", r.setCookies)
+	}
+	web.flow = nil
+	r = web.must("GET", "/v1/auth/me", nil, 200)
+	u := r.body["user"].(map[string]any)
+	if u["email"] != "new@example.com" || u["email_verified_at"] == nil || u["google_linked"] != true || u["has_password"] != false || u["name"] != "New Person" {
+		t.Fatalf("new google account: %s", r.raw)
+	}
+	if len(google.verifiers) != 1 || google.verifiers[0] == "" {
+		t.Fatalf("the exchange carries the PKCE verifier: %v", google.verifiers)
+	}
+	// Signing in again with the same identity finds the same account.
+	again := &client{t: t, base: h.srv.URL}
+	state = googleStart(t, again, "")
+	r = again.do("GET", "/v1/auth/google/callback?code=new&state="+state, nil)
+	if r.status != 302 || r.location != "http://localhost:3000/dashboard" {
+		t.Fatalf("second sign-in: %d %s", r.status, r.location)
+	}
+	again.signIn(r)
+	if r = again.must("GET", "/v1/auth/me", nil, 200); str(r.body, "user", "id") != u["id"] {
+		t.Fatalf("same account: %s", r.raw)
+	}
+
+	// Someone registered squat@example.com with a password but never proved
+	// the inbox. When its owner arrives through Google, the account is theirs:
+	// verified, linked, the password dropped, the squatter signed out.
+	squatter := &client{t: t, base: h.srv.URL}
+	squatter.signIn(squatter.must("POST", "/v1/auth/register", map[string]any{"email": "squat@example.com", "password": "hunter2hunter2"}, 201))
+	owner := &client{t: t, base: h.srv.URL}
+	state = googleStart(t, owner, "")
+	owner.signIn(owner.do("GET", "/v1/auth/google/callback?code=squat&state="+state, nil))
+	r = owner.must("GET", "/v1/auth/me", nil, 200)
+	u = r.body["user"].(map[string]any)
+	if u["email_verified_at"] == nil || u["google_linked"] != true || u["has_password"] != false {
+		t.Fatalf("claimed account: %s", r.raw)
+	}
+	squatter.must("GET", "/v1/auth/me", nil, 401)
+	squatter.must("POST", "/v1/auth/login", map[string]any{"email": "squat@example.com", "password": "hunter2hunter2"}, 400) // no_password
+
+	// A verified account with a password is linked and keeps both ways in.
+	keeper := h.signUp(t, "keep@example.com")
+	viaGoogle := &client{t: t, base: h.srv.URL}
+	state = googleStart(t, viaGoogle, "")
+	viaGoogle.signIn(viaGoogle.do("GET", "/v1/auth/google/callback?code=keep&state="+state, nil))
+	r = viaGoogle.must("GET", "/v1/auth/me", nil, 200)
+	u = r.body["user"].(map[string]any)
+	if u["google_linked"] != true || u["has_password"] != true {
+		t.Fatalf("linked account keeps its password: %s", r.raw)
+	}
+	keeper.must("GET", "/v1/auth/me", nil, 200)
+
+	// Google vouching for an identity but not its address cannot take over
+	// an account; with no account in the way it makes an unverified one.
+	stranger := &client{t: t, base: h.srv.URL}
+	state = googleStart(t, stranger, "")
+	if r = stranger.do("GET", "/v1/auth/google/callback?code=unvsquat&state="+state, nil); r.location != "http://localhost:3000/login?error=google_email_unverified" {
+		t.Fatalf("unverified google email on an existing account: %s", r.location)
+	}
+	before := len(h.mailer.sent)
+	state = googleStart(t, stranger, "")
+	stranger.signIn(stranger.do("GET", "/v1/auth/google/callback?code=unverified&state="+state, nil))
+	r = stranger.must("GET", "/v1/auth/me", nil, 200)
+	if r.body["user"].(map[string]any)["email_verified_at"] != nil || len(h.mailer.sent) != before+1 {
+		t.Fatalf("an unverified google address starts unverified and gets a code: %s (%d emails)", r.raw, len(h.mailer.sent)-before)
+	}
+
+	// What can go wrong on the way back.
+	lost := &client{t: t, base: h.srv.URL}
+	state = googleStart(t, lost, "")
+	if r = lost.do("GET", "/v1/auth/google/callback?code=new&state=not-the-state", nil); r.location != "http://localhost:3000/login?error=google_state" {
+		t.Fatalf("wrong state: %s", r.location)
+	}
+	if r = lost.do("GET", "/v1/auth/google/callback?error=access_denied&state="+state, nil); r.location != "http://localhost:3000/login?error=google_cancelled" {
+		t.Fatalf("cancelled: %s", r.location)
+	}
+	state = googleStart(t, lost, "")
+	if r = lost.do("GET", "/v1/auth/google/callback?code=bogus&state="+state, nil); r.location != "http://localhost:3000/login?error=google_failed" {
+		t.Fatalf("bad code: %s", r.location)
+	}
+	lost.flow = nil
+	if r = lost.do("GET", "/v1/auth/google/callback?code=new&state="+state, nil); r.location != "http://localhost:3000/login?error=google_state" {
+		t.Fatalf("no flow cookie: %s", r.location)
+	}
+	// A destination off the dashboard is not honoured.
+	state = googleStart(t, lost, "https://evil.example/")
+	if r = lost.do("GET", "/v1/auth/google/callback?code=new&state="+state, nil); r.location != "http://localhost:3000/dashboard" {
+		t.Fatalf("open redirect: %s", r.location)
+	}
+}
+
+// TestGoogleOff: without a client, the flow does not exist.
+func TestGoogleOff(t *testing.T) {
+	h := startApp(t)
+	web := &client{t: t, base: h.srv.URL}
+	r := web.must("GET", "/v1/auth/config", nil, 200)
+	if r.body["google_sign_in"] != false {
+		t.Fatalf("config: %s", r.raw)
+	}
+	if r = web.do("GET", "/v1/auth/google/start", nil); r.status != 404 || str(r.body, "code") != "google_off" {
+		t.Fatalf("start when off: %d %s", r.status, r.raw)
+	}
+}
+
+// TestTurnstile: with the bot check on, the three public forms need a token.
+func TestTurnstile(t *testing.T) {
+	t.Setenv("SIMHOOK_TURNSTILE_SITE_KEY", "site-key")
+	t.Setenv("SIMHOOK_TURNSTILE_SECRET_KEY", "secret-key")
+	h := startAppWith(t, app.Options{Turnstile: &turnstile.Fake{Accept: "human"}})
+	web := &client{t: t, base: h.srv.URL}
+
+	r := web.must("GET", "/v1/auth/config", nil, 200)
+	if r.body["turnstile_site_key"] != "site-key" {
+		t.Fatalf("config: %s", r.raw)
+	}
+	reg := map[string]any{"email": "bot@example.com", "password": "hunter2hunter2"}
+	if r = web.do("POST", "/v1/auth/register", reg); r.status != 400 || str(r.body, "code") != "turnstile_failed" {
+		t.Fatalf("register without a token: %d %s", r.status, r.raw)
+	}
+	reg["turnstile_token"] = "robot"
+	if r = web.do("POST", "/v1/auth/register", reg); r.status != 400 {
+		t.Fatalf("register with a bad token: %d %s", r.status, r.raw)
+	}
+	reg["turnstile_token"] = "human"
+	web.signIn(web.must("POST", "/v1/auth/register", reg, 201))
+
+	login := map[string]any{"email": "bot@example.com", "password": "hunter2hunter2"}
+	if r = web.do("POST", "/v1/auth/login", login); r.status != 400 || str(r.body, "code") != "turnstile_failed" {
+		t.Fatalf("login without a token: %d %s", r.status, r.raw)
+	}
+	login["turnstile_token"] = "human"
+	web.must("POST", "/v1/auth/login", login, 200)
+
+	if r = web.do("POST", "/v1/auth/password-reset/request", map[string]any{"email": "bot@example.com"}); r.status != 400 {
+		t.Fatalf("reset request without a token: %d %s", r.status, r.raw)
+	}
+	web.must("POST", "/v1/auth/password-reset/request", map[string]any{"email": "bot@example.com", "turnstile_token": "human"}, 202)
 }

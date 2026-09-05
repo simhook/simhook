@@ -63,6 +63,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sign-in options
+         * @description What the sign-in page needs to know: whether Google sign-in is on, and the Turnstile site key when a bot check is required on the sign-in, sign-up, and password reset forms.
+         */
+        get: operations["auth-config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/login": {
         parameters: {
             query?: never;
@@ -843,6 +863,12 @@ export interface components {
             /** Format: int64 */
             use_count: number;
         };
+        AuthConfigOutputBody: {
+            /** @description Whether Continue with Google is available at GET /v1/auth/google/start. */
+            google_sign_in: boolean;
+            /** @description Site key for the Cloudflare Turnstile widget, or empty when no bot check is needed. */
+            turnstile_site_key: string;
+        };
         Batch: {
             body: string;
             /** Format: date-time */
@@ -1085,6 +1111,8 @@ export interface components {
             /** Format: email */
             email: string;
             password: string;
+            /** @description Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key. */
+            turnstile_token?: string;
         };
         MeOutputBody: {
             limits: components["schemas"]["Limits"];
@@ -1215,6 +1243,8 @@ export interface components {
             name?: string;
             /** @description At least 10 characters. */
             password: string;
+            /** @description Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key. */
+            turnstile_token?: string;
         };
         RenameKeyInputBody: {
             name: string;
@@ -1228,6 +1258,8 @@ export interface components {
         ResetRequestInputBody: {
             /** Format: email */
             email: string;
+            /** @description Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key. */
+            turnstile_token?: string;
         };
         SecretOutputBody: {
             secret: string;
@@ -1325,6 +1357,8 @@ export interface components {
             email: string;
             /** Format: date-time */
             email_verified_at: string | null;
+            google_linked: boolean;
+            has_password: boolean;
             id: string;
             /** Format: date-time */
             last_login_at: string | null;
@@ -1529,6 +1563,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "auth-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfigOutputBody"];
+                };
             };
             /** @description Error */
             default: {

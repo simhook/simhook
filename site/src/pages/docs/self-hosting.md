@@ -37,6 +37,13 @@ Two things are built into the app and worth knowing:
 - **Updates.** The app polls `https://simhook.dev/download/android.json` for new releases, which is fine for most self-hosters: you get the same signed builds. To serve your own builds instead, build the app with `-PupdateManifestUrl=https://your-domain/…` and your own signing key; [android/RELEASING.md](https://github.com/simhook/simhook/blob/main/android/RELEASING.md) covers the release process.
 - **Push.** Pushes carry no message content, only a nudge to check in. The app and the server must belong to the same Firebase project: the published app is tied to simhook's production project, so a self-hosted server can wake phones only if you build the app with your own project's `google-services.json` in `android/app/src/release/` and give the server that project's service account. Without that, phones still work, but only on their check-in schedule.
 
+## Optional: Google sign-in and a bot check
+
+Both are off until their keys are set in `deploy/api.env`; the sign-in page adapts on its own.
+
+- **Google sign-in.** Create an OAuth client (web application) in Google Cloud with `https://api.<your domain>/v1/auth/google/callback` as the redirect URI, then set `SIMHOOK_GOOGLE_CLIENT_ID` and `SIMHOOK_GOOGLE_CLIENT_SECRET`. The code exchange runs on the API; the dashboard only links to it.
+- **Bot check.** Create a Cloudflare Turnstile widget for `app.<your domain>` and set `SIMHOOK_TURNSTILE_SITE_KEY` and `SIMHOOK_TURNSTILE_SECRET_KEY`. Sign-in, sign-up, and password reset then need a token, which the widget obtains without bothering most visitors.
+
 ## Keeping it healthy
 
 - `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets. Losing it means every webhook needs a new secret. Keep a copy off the host.

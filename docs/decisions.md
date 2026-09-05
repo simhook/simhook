@@ -169,3 +169,14 @@ Sessions slide. One ends after 30 days unused, use pushes the end out, and it en
 **Why:** The first version had the site ask the API on every page and remember the answer in local storage, and the dashboard learn it was signed out only after a failed request. That meant a flash of the wrong bar, a flash of an empty dashboard, a browser that could not sign in again while it held a dead cookie, and three fixes in one evening. A cookie the API keeps in step is read for free, is right on the first frame, and has one source of truth. A sliding session with a cap keeps a daily user signed in without keeping a forgotten laptop signed in forever, and seeing and ending sessions is what a user expects from a page that can send texts from their phone.
 
 **Rules out:** The dashboard or the site writing cookies; anything that trusts the flag for more than routing; a session that never ends.
+
+## 016. Google sign-in and a bot check, both optional, both on the API
+
+**Date:** 2026-09-05
+**Decision:** Sign in with Google is the authorization-code flow with PKCE, run by the API: the dashboard links to `/v1/auth/google/start`, the API sends the browser to Google with a sealed, ten-minute cookie holding the state, the PKCE verifier, and the destination, and `/v1/auth/google/callback` exchanges the code, validates the id token, and issues the ordinary session cookies. No Google script runs in the dashboard. An account already linked to the Google id signs in; otherwise an account with the same address is linked, provided Google vouches for the address, and if that account never verified its email, its password is dropped and its sessions ended, because whoever set them did not own the inbox; otherwise a new account is created, verified when Google says the address is.
+
+The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: the dashboard renders the widget in its interaction-only mode with the site key the API publishes at `/v1/auth/config`, and the API verifies the token once with the secret. Each feature is off until both of its keys are set, and the API refuses a half-configured pair.
+
+**Why:** Google sign-in removes the password for most people and the id token gives us a verified email for free; running the exchange on the API keeps the client secret and the token validation in one place and the dashboard free of third-party code. A bot check on the three public forms is the cheapest defence against sign-up floods that would otherwise cost email sends, and Turnstile is the one that does not make people click on pictures. Both are gated on configuration so self-hosters can run without either and the hosted service can turn them on by setting keys.
+
+**Rules out:** Google's own sign-in button or script in the dashboard; linking accounts on an address Google has not verified; a bot check anywhere but the three public forms.

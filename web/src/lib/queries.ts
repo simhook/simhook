@@ -90,6 +90,16 @@ export function useAuthMutations() {
   };
 }
 
+/** Whether Google sign-in is on and whether the forms need a bot check. */
+export function useAuthConfig() {
+  return useQuery({
+    queryKey: ["auth-config"] as const,
+    queryFn: () => unwrap(api.GET("/v1/auth/config")),
+    staleTime: Infinity,
+    retry: 1,
+  });
+}
+
 export function useSessions() {
   return useQuery({ queryKey: keys.sessions, queryFn: () => unwrap(api.GET("/v1/auth/sessions")) });
 }

@@ -25,10 +25,14 @@ type User struct {
 	LastLoginAt         *time.Time      `db:"last_login_at" json:"last_login_at"`
 	CreatedAt           time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt           time.Time       `db:"updated_at" json:"updated_at"`
+	// How the account can sign in, for the dashboard to say so.
+	HasPassword  bool `db:"has_password" json:"has_password"`
+	GoogleLinked bool `db:"google_linked" json:"google_linked"`
 }
 
 const userCols = `id, email, name, password_hash, google_sub, avatar_url, role, email_verified_at,
-	banned_at, deletion_requested_at, deletion_reason, onboarding, last_login_at, created_at, updated_at`
+	banned_at, deletion_requested_at, deletion_reason, onboarding, last_login_at, created_at, updated_at,
+	(password_hash is not null) as has_password, (google_sub is not null) as google_linked`
 
 // CreateUserParams are the fields a new account starts with.
 type CreateUserParams struct {
@@ -69,6 +73,21 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) 
 // GetUserByGoogleSub fetches by the Google subject id.
 func (s *Store) GetUserByGoogleSub(ctx context.Context, sub string) (User, error) {
 	return one[User](s.q.Query(ctx, `select `+userCols+` from users where google_sub = $1`, sub))
+}
+
+// LinkGoogle attaches a Google identity to an account and marks the address
+// verified, since Google vouched for it. dropPassword removes a password
+// set before the address was ever verified. Returns ErrConflict when the
+// Google identity is already attached to another account.
+func (s *Store) LinkGoogle(ctx context.Context, id uuid.UUID, sub, avatarURL string, dropPassword bool) (User, error) {
+	u, err := one[User](s.q.Query(ctx, `
+		update users set
+			google_sub = $2,
+			avatar_url = coalesce(avatar_url, nullif($3, '')),
+			email_verified_at = coalesce(email_verified_at, now()),
+			password_hash = case when $4 then null else password_hash end
+		where id = $1 returning `+userCols, id, sub, avatarURL, dropPassword))
+	return u, wrapWrite(err)
 }
 
 // SetEmailVerified marks the address verified.

@@ -16,18 +16,30 @@ import (
 // Shapes
 // ---------------------------------------------------------------------------
 
+// turnstileDoc explains the bot-check token where a form accepts one.
+const turnstileDoc = "Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key."
+
 type registerInput struct {
 	Body struct {
-		Email    string `json:"email" format:"email" maxLength:"254" doc:"Sign-in email. A verification code is sent to it."`
-		Password string `json:"password" minLength:"10" maxLength:"200" doc:"At least 10 characters."`
-		Name     string `json:"name,omitempty" maxLength:"100" doc:"Display name."`
+		Email          string `json:"email" format:"email" maxLength:"254" doc:"Sign-in email. A verification code is sent to it."`
+		Password       string `json:"password" minLength:"10" maxLength:"200" doc:"At least 10 characters."`
+		Name           string `json:"name,omitempty" maxLength:"100" doc:"Display name."`
+		TurnstileToken string `json:"turnstile_token,omitempty" maxLength:"2048" doc:"Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key."`
 	}
 }
 
 type loginInput struct {
 	Body struct {
-		Email    string `json:"email" format:"email" maxLength:"254"`
-		Password string `json:"password" maxLength:"200"`
+		Email          string `json:"email" format:"email" maxLength:"254"`
+		Password       string `json:"password" maxLength:"200"`
+		TurnstileToken string `json:"turnstile_token,omitempty" maxLength:"2048" doc:"Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key."`
+	}
+}
+
+type authConfigOutput struct {
+	Body struct {
+		GoogleSignIn     bool   `json:"google_sign_in" doc:"Whether Continue with Google is available at GET /v1/auth/google/start."`
+		TurnstileSiteKey string `json:"turnstile_site_key" doc:"Site key for the Cloudflare Turnstile widget, or empty when no bot check is needed."`
 	}
 }
 
@@ -87,7 +99,8 @@ type verifyEmailInput struct {
 
 type resetRequestInput struct {
 	Body struct {
-		Email string `json:"email" format:"email" maxLength:"254"`
+		Email          string `json:"email" format:"email" maxLength:"254"`
+		TurnstileToken string `json:"turnstile_token,omitempty" maxLength:"2048" doc:"Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key."`
 	}
 }
 
@@ -158,14 +171,42 @@ type renameKeyInput struct {
 // Handlers
 // ---------------------------------------------------------------------------
 
+// checkTurnstile verifies the bot token when the check is on.
+func (s *Server) checkTurnstile(ctx context.Context, token string) error {
+	if s.deps.Turnstile == nil {
+		return nil
+	}
+	ip, _ := ctx.Value(remoteAddrKey{}).(string)
+	if err := s.deps.Turnstile.Verify(ctx, token, hostOf(ip)); err != nil {
+		return mapErr(ctx, s.deps.Log, err)
+	}
+	return nil
+}
+
 func (s *Server) registerAuth() {
 	tags := []string{"auth"}
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "auth-config", Method: http.MethodGet, Path: "/v1/auth/config",
+		Summary: "Sign-in options", Tags: tags,
+		Description: "What the sign-in page needs to know: whether Google sign-in is on, and the Turnstile site key when a bot check is required on the sign-in, sign-up, and password reset forms.",
+	}, func(ctx context.Context, _ *struct{}) (*authConfigOutput, error) {
+		out := &authConfigOutput{}
+		out.Body.GoogleSignIn = s.deps.Google != nil
+		if s.deps.Turnstile != nil {
+			out.Body.TurnstileSiteKey = s.deps.Config.TurnstileSiteKey
+		}
+		return out, nil
+	})
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "register", Method: http.MethodPost, Path: "/v1/auth/register",
 		Summary: "Create an account", Tags: tags, DefaultStatus: http.StatusCreated,
 		Description: "Creates the account, signs it in with the session cookies, and emails a verification code. Sending is blocked until the email is verified.",
 	}, func(ctx context.Context, in *registerInput) (*sessionOutput, error) {
+		if err := s.checkTurnstile(ctx, in.Body.TurnstileToken); err != nil {
+			return nil, err
+		}
 		u, err := s.deps.Auth.Register(ctx, in.Body.Email, in.Body.Password, in.Body.Name)
 		if err != nil {
 			return nil, mapErr(ctx, s.deps.Log, err)
@@ -178,6 +219,9 @@ func (s *Server) registerAuth() {
 		Summary: "Sign in", Tags: tags,
 		Description: "Checks the password and sets the session cookies the dashboard uses. A session lives 30 days without use, longer while it is used, and 180 days at most.",
 	}, func(ctx context.Context, in *loginInput) (*sessionOutput, error) {
+		if err := s.checkTurnstile(ctx, in.Body.TurnstileToken); err != nil {
+			return nil, err
+		}
 		u, err := s.deps.Auth.Login(ctx, in.Body.Email, in.Body.Password)
 		if err != nil {
 			return nil, mapErr(ctx, s.deps.Log, err)
@@ -321,6 +365,9 @@ func (s *Server) registerAuth() {
 		Summary: "Request a password reset code", Tags: tags, DefaultStatus: http.StatusAccepted,
 		Description: "Emails a code if the address has an account. The response is the same either way.",
 	}, func(ctx context.Context, in *resetRequestInput) (*emptyOutput, error) {
+		if err := s.checkTurnstile(ctx, in.Body.TurnstileToken); err != nil {
+			return nil, err
+		}
 		if err := s.deps.Auth.RequestPasswordReset(ctx, in.Body.Email); err != nil {
 			return nil, mapErr(ctx, s.deps.Log, err)
 		}

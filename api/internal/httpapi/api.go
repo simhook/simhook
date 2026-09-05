@@ -24,6 +24,8 @@ import (
 	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/gateway"
 	"github.com/simhook/simhook/internal/ratelimit"
+	"github.com/simhook/simhook/internal/secrets"
+	"github.com/simhook/simhook/internal/turnstile"
 	"github.com/simhook/simhook/internal/webhooks"
 )
 
@@ -35,6 +37,12 @@ type Deps struct {
 	Billing  *billing.Service
 	Gateway  *gateway.Service
 	Webhooks *webhooks.Service
+	// Box seals the Google sign-in flow cookie.
+	Box *secrets.Box
+	// Google runs Google sign-in; nil means the feature is off.
+	Google auth.GoogleExchanger
+	// Turnstile checks the sign-in forms' bot tokens; nil means off.
+	Turnstile turnstile.Verifier
 }
 
 // Server is the HTTP surface.
@@ -117,6 +125,7 @@ func New(deps Deps) *Server {
 
 	s.registerMisc()
 	s.registerAuth()
+	s.registerGoogle()
 	s.registerDevices()
 	s.registerMessages()
 	s.registerWebhooks()
@@ -147,9 +156,10 @@ var credentialPaths = map[string]bool{
 // cookiePaths are the operations that write the cookies themselves; the
 // middleware leaves the response's cookies to them.
 var cookiePaths = map[string]bool{
-	"/v1/auth/login":    true,
-	"/v1/auth/register": true,
-	"/v1/auth/logout":   true,
+	"/v1/auth/login":           true,
+	"/v1/auth/register":        true,
+	"/v1/auth/logout":          true,
+	"/v1/auth/google/callback": true,
 }
 
 // authenticate resolves the caller and keeps the browser's cookies truthful.

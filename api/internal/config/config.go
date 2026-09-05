@@ -58,11 +58,18 @@ type Config struct {
 	CookieDomain string `env:"SIMHOOK_COOKIE_DOMAIN"`
 	// SessionTTLHours is how long a session lives without being used; use
 	// extends it. SessionMaxHours caps its life however active it is.
-	SessionTTLHours          int    `env:"SIMHOOK_SESSION_TTL_HOURS" envDefault:"720"`
-	SessionMaxHours          int    `env:"SIMHOOK_SESSION_MAX_HOURS" envDefault:"4320"`
-	RequireEmailVerification bool   `env:"SIMHOOK_REQUIRE_EMAIL_VERIFICATION" envDefault:"true"`
-	GoogleClientID           string `env:"SIMHOOK_GOOGLE_CLIENT_ID"`
-	TurnstileSecretKey       string `env:"SIMHOOK_TURNSTILE_SECRET_KEY"`
+	SessionTTLHours          int  `env:"SIMHOOK_SESSION_TTL_HOURS" envDefault:"720"`
+	SessionMaxHours          int  `env:"SIMHOOK_SESSION_MAX_HOURS" envDefault:"4320"`
+	RequireEmailVerification bool `env:"SIMHOOK_REQUIRE_EMAIL_VERIFICATION" envDefault:"true"`
+
+	// Google sign-in: an OAuth client whose redirect URI is
+	// <PublicURL>/v1/auth/google/callback. Both empty means off.
+	GoogleClientID     string `env:"SIMHOOK_GOOGLE_CLIENT_ID"`
+	GoogleClientSecret string `env:"SIMHOOK_GOOGLE_CLIENT_SECRET"`
+	// Cloudflare Turnstile on the sign-in forms: the site key goes to the
+	// dashboard, the secret stays here. Both empty means off.
+	TurnstileSiteKey   string `env:"SIMHOOK_TURNSTILE_SITE_KEY"`
+	TurnstileSecretKey string `env:"SIMHOOK_TURNSTILE_SECRET_KEY"`
 
 	secretKey []byte
 }
@@ -95,6 +102,12 @@ func (c *Config) validate() error {
 	}
 	if c.SessionMaxHours < c.SessionTTLHours {
 		return fmt.Errorf("config: SIMHOOK_SESSION_MAX_HOURS (%d) must be at least SIMHOOK_SESSION_TTL_HOURS (%d)", c.SessionMaxHours, c.SessionTTLHours)
+	}
+	if (c.GoogleClientID == "") != (c.GoogleClientSecret == "") {
+		return fmt.Errorf("config: SIMHOOK_GOOGLE_CLIENT_ID and SIMHOOK_GOOGLE_CLIENT_SECRET go together")
+	}
+	if (c.TurnstileSiteKey == "") != (c.TurnstileSecretKey == "") {
+		return fmt.Errorf("config: SIMHOOK_TURNSTILE_SITE_KEY and SIMHOOK_TURNSTILE_SECRET_KEY go together")
 	}
 	c.CookieDomain = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.CookieDomain), "."))
 	if c.CookieDomain != "" {
@@ -146,6 +159,14 @@ func (c *Config) BrowserOrigins() []string {
 		}
 	}
 	return out
+}
+
+// GoogleEnabled reports whether Google sign-in is configured.
+func (c *Config) GoogleEnabled() bool { return c.GoogleClientID != "" && c.GoogleClientSecret != "" }
+
+// TurnstileEnabled reports whether the bot check is configured.
+func (c *Config) TurnstileEnabled() bool {
+	return c.TurnstileSiteKey != "" && c.TurnstileSecretKey != ""
 }
 
 // SecretKey returns the decoded server key.

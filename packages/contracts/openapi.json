@@ -93,6 +93,24 @@
         ],
         "type": "object"
       },
+      "AuthConfigOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "google_sign_in": {
+            "description": "Whether Continue with Google is available at GET /v1/auth/google/start.",
+            "type": "boolean"
+          },
+          "turnstile_site_key": {
+            "description": "Site key for the Cloudflare Turnstile widget, or empty when no bot check is needed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "google_sign_in",
+          "turnstile_site_key"
+        ],
+        "type": "object"
+      },
       "Batch": {
         "additionalProperties": false,
         "properties": {
@@ -875,6 +893,11 @@
           "password": {
             "maxLength": 200,
             "type": "string"
+          },
+          "turnstile_token": {
+            "description": "Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key.",
+            "maxLength": 2048,
+            "type": "string"
           }
         },
         "required": [
@@ -1337,6 +1360,11 @@
             "maxLength": 200,
             "minLength": 10,
             "type": "string"
+          },
+          "turnstile_token": {
+            "description": "Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key.",
+            "maxLength": 2048,
+            "type": "string"
           }
         },
         "required": [
@@ -1391,6 +1419,11 @@
           "email": {
             "format": "email",
             "maxLength": 254,
+            "type": "string"
+          },
+          "turnstile_token": {
+            "description": "Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key.",
+            "maxLength": 2048,
             "type": "string"
           }
         },
@@ -1668,6 +1701,12 @@
               "null"
             ]
           },
+          "google_linked": {
+            "type": "boolean"
+          },
+          "has_password": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
@@ -1704,7 +1743,9 @@
           "onboarding",
           "last_login_at",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "has_password",
+          "google_linked"
         ],
         "type": "object"
       },
@@ -2133,6 +2174,38 @@
           "api-keys"
         ],
         "x-simhook-scope": "session"
+      }
+    },
+    "/v1/auth/config": {
+      "get": {
+        "description": "What the sign-in page needs to know: whether Google sign-in is on, and the Turnstile site key when a bot check is required on the sign-in, sign-up, and password reset forms.",
+        "operationId": "auth-config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfigOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign-in options",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/v1/auth/login": {

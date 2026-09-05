@@ -12,6 +12,7 @@ import (
 	"github.com/simhook/simhook/internal/billing"
 	"github.com/simhook/simhook/internal/gateway"
 	"github.com/simhook/simhook/internal/store"
+	"github.com/simhook/simhook/internal/turnstile"
 	"github.com/simhook/simhook/internal/validate"
 	"github.com/simhook/simhook/internal/webhooks"
 )
@@ -131,6 +132,10 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusUnprocessableEntity, "validation_failed", err.Error())
 	case errors.Is(err, auth.ErrNoPassword):
 		return apiErr(http.StatusBadRequest, "no_password", err.Error())
+	case errors.Is(err, auth.ErrGoogleEmailUnverified):
+		return apiErr(http.StatusBadRequest, "google_email_unverified", err.Error())
+	case errors.Is(err, turnstile.ErrFailed):
+		return apiErr(http.StatusBadRequest, "turnstile_failed", "The bot check did not pass. Reload the page and try again.")
 	case errors.Is(err, gateway.ErrInvalidPairingCode):
 		return apiErr(http.StatusBadRequest, "invalid_pairing_code", err.Error())
 	case errors.Is(err, gateway.ErrEmailUnverified):
