@@ -9,7 +9,7 @@ Short architecture decision records. Newest at the bottom. Each one says what we
 
 | Surface | Value |
 |---|---|
-| Domains | simhook.dev (primary), simhook.io (redirect) |
+| Domains | simhook.dev (primary), simhook.io (redirect, not yet registered as of 2026-09-05) |
 | GitHub org | github.com/simhook |
 | Android application id | `dev.simhook.app` |
 | Kotlin package | `dev.simhook.app` |
@@ -45,7 +45,7 @@ Short architecture decision records. Newest at the bottom. Each one says what we
 ## 003. Web dashboard on Next.js
 
 **Date:** 2026-09-04
-**Decision:** Next.js app router, React 19, Tailwind 4, shadcn/Radix, TanStack Query. The dashboard is a thin client of the API and authenticates with an httpOnly session cookie issued by the API. The Next.js server never holds credentials or talks to the database.
+**Decision:** Next.js app router, React 19, Tailwind 4, shadcn primitives on Base UI, TanStack Query. The dashboard is a thin client of the API and authenticates with an httpOnly session cookie issued by the API (see 015 for the whole model). The Next.js server never holds credentials or talks to the database.
 
 ## 004. Android app: Kotlin and Compose only
 
@@ -93,15 +93,18 @@ pnpm workspaces for the JS packages. Go and Gradle are their own toolchains.
 
 | From | To | Trigger |
 |---|---|---|
-| queued | dispatched | push accepted by the push provider |
-| queued | failed | push rejected, or no valid push token |
+| queued | dispatched | the phone fetched it from its outbox |
+| queued | failed | no valid push token, or the phone was unpaired or disabled |
 | dispatched | sent | phone reports the carrier accepted it |
 | dispatched | failed | phone reports a send error |
 | sent | delivered | phone reports a delivery receipt |
 | sent | failed | phone reports a delivery failure |
-| queued, dispatched | unknown | no report within the stale window |
+| queued, dispatched | unknown | no report within the stale window, counted as 018 says |
+| unknown | sent, delivered, failed | a late report from the phone; the truth wins |
 
 Batch counters are incremented atomically on each transition, never recomputed by scanning.
+
+*Amended 2026-09-05 by 018: `dispatched` means fetched by the phone, not accepted by the push provider, and a late report resolves an `unknown` message.*
 
 ## 008. SDK and MCP server
 
@@ -135,6 +138,8 @@ Behind the proxy the API trusts forwarded client addresses only when `SIMHOOK_TR
 **Decision:** A newly paired phone forwards incoming SMS by default. Any change to a phone made through the dashboard or the API (settings, default phone, unpairing) sends the phone the same check-in push the presence sweep uses, so it reloads its settings within seconds instead of at its next scheduled heartbeat.
 
 **Why:** In the first production test the phone forwarded nothing because the switch defaulted to off, and the fix made in the dashboard took a heartbeat interval to arrive. Receiving is a headline feature and the user grants the SMS permission during setup, so off-by-default was only a trap. Reusing the check-in push means no new app code and no new message type.
+
+*Amended 2026-09-05 by 018: after a check-in the phone also fetches its outbox, so a settings change and any waiting sends arrive together.*
 
 ## 012. Release signing, distribution, and in-app updates
 
@@ -180,3 +185,21 @@ The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: t
 **Why:** Google sign-in removes the password for most people and the id token gives us a verified email for free; running the exchange on the API keeps the client secret and the token validation in one place and the dashboard free of third-party code. A bot check on the three public forms is the cheapest defence against sign-up floods that would otherwise cost email sends, and Turnstile is the one that does not make people click on pictures. Both are gated on configuration so self-hosters can run without either and the hosted service can turn them on by setting keys.
 
 **Rules out:** Google's own sign-in button or script in the dashboard; linking accounts on an address Google has not verified; a bot check anywhere but the three public forms.
+
+## 017. The phone app follows the plain design
+
+**Date:** 2026-09-05
+**Decision:** The Android app carries decision 014 onto the phone: Instrument Sans for words and Geist Mono for anything a machine wrote, black on white, a light theme only, square corners, hairlines instead of cards, sections under a small mono label, status as a dot next to a word, at most one filled black button per screen, and words in place of icons, including a row of text tabs at the top in place of the icon bar. Material components stay underneath for switches, sliders, and dialogs, recoloured to the same five colours. The typefaces ship as variable TTFs taken from their own repositories; both are under the SIL Open Font License and are credited in `THIRD_PARTY_NOTICES.md`.
+
+**Why:** The app is the third surface people see after the site and the dashboard, and on the download page it sits in a screenshot next to the dashboard. Material's default look (dynamic colour, rounded cards, an icon bar) said "another Android app" where the other two surfaces say "a plain tool". Bundling the fonts keeps the app free of any font service.
+
+**Rules out:** Dynamic colour, a dark theme, cards, icons in navigation.
+
+## 018. A push is a wake-up; the phone pulls its outbox
+
+**Date:** 2026-09-05
+**Decision:** A push to the phone carries no message. It says "you have something to send", naming the phone, or "check in", and the phone fetches its outbox from the API with its own device token. `GET /v1/device/outbox` hands over every message that is due and not yet reported on, marking each `dispatched` the first time it is fetched; a message stays on offer until the phone reports on it, so a phone that lost one gets it again. Each message records when the phone is expected to have sent it, given the phone's pacing, and the stale sweep waits for that time plus the stale window before calling a report overdue. A message still `queued` waits a day, the push's lifetime, for a phone that is away before it is given up on as `unknown`, and a late truthful report from the phone still resolves an `unknown` message. Pairing a handset to an account cuts off every earlier pairing of that handset, on any account.
+
+**Why:** Pushing the content made the push channel the delivery path: a phone that missed a push never got the message, a delayed push sent the message late with no record of why, the sweep flipped paced sends to `unknown` while the phone was still working through them and then ignored the phone's truthful report, and a handset moved to another account kept sending for the old one. A pull model puts the phone in charge of what it sends and the API in charge of what is owed, with one row of truth between them. It also makes the self-hosting page's promise true: the push carries nothing, so a self-hoster's phones lose only speed, not messages, when they cannot be pushed.
+
+**Rules out:** Message content in a push; `dispatched` meaning anything but "the phone has fetched it".

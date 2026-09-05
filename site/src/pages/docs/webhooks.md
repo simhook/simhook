@@ -12,7 +12,7 @@ In the dashboard under **Webhooks**, or with the API:
 
 ```sh
 curl https://api.simhook.dev/v1/webhooks \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/sms-events", "events": ["message.received", "message.delivered", "message.failed"]}'
 ```
@@ -58,7 +58,7 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a2d…
 }
 ```
 
-Answer with any `2xx` within 30 seconds. Do the work afterwards if it takes longer. Retries reuse the same `X-Simhook-Delivery` id, so you can de-duplicate on it.
+Answer with any `2xx` within 30 seconds. Do the work afterwards if it takes longer. The body's `id` names the event and is the same for every endpoint that receives it; `X-Simhook-Delivery` names this delivery to this endpoint and stays the same across its retries, so de-duplicate on whichever fits: the event id if several of your endpoints receive the same events, the delivery id otherwise.
 
 ## Verifying the signature
 
@@ -113,7 +113,7 @@ def verify(raw_body: bytes, header: str, secret: str) -> bool:
 
 ## Retries
 
-A delivery that fails (no answer, a network error, or a non-`2xx` status) is retried after 1 minute, then 5 and 15 minutes, then 1, 3, 6, 12, and 24 hours: nine attempts over about two days. A `4xx` answer other than `408` and `429` means the request itself was rejected, so those stop after three attempts.
+A delivery that fails (no answer, a network error, or a non-`2xx` status) is retried after 1 minute, then 5 and 15 minutes, then 1, 3, 6, 12, and 24 hours: nine attempts over about two days. A `4xx` answer other than `408`, `425`, and `429` means the request itself was rejected, so those stop after three attempts.
 
 Every attempt is in the delivery log: `GET /v1/webhooks/deliveries`, or the **Deliveries** tab of a webhook in the dashboard, with the status, the answer, and the time.
 

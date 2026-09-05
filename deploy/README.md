@@ -79,7 +79,7 @@ A change to `caddy/Caddyfile` alone needs a reload, not a rebuild:
 docker compose -f docker-compose.prod.yaml exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-To use the images CI publishes instead of building on the host, log in to GitHub's registry with a token that has `read:packages`, set `API_IMAGE` and `WEB_IMAGE` in `.env`, then:
+To use the images CI publishes instead of building on the host, log in to GitHub's registry with a token that has `read:packages`, set `API_IMAGE` (and, on simhook.dev itself, `WEB_IMAGE` and `SITE_IMAGE`) in `.env`, then:
 
 ```sh
 docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d
@@ -97,7 +97,7 @@ docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhoo
 
 - `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets. Losing it means every webhook needs a new secret. Keep a copy off the host.
 - `ROOT_DOMAIN` is also the cookie domain: the API sets a readable signed-in flag cookie on it so the site and the dashboard know who is signed in before asking. `API_DOMAIN` and `APP_DOMAIN` must be under it, and the API refuses to start otherwise.
-- The dashboard bakes the API origin into its build. Changing `API_DOMAIN` means rebuilding the `web` image.
+- The dashboard and the site bake the API and dashboard origins into their builds. Changing `API_DOMAIN` or `APP_DOMAIN` means rebuilding the `web` and `site` images, and the published `web` and `site` images only fit simhook.dev.
 - The API trusts forwarded client addresses only because compose sets `SIMHOOK_TRUST_PROXY=true`. Do not set that on an instance exposed without a proxy.
 - Logs: `docker compose -f docker-compose.prod.yaml logs -f api web caddy`.
 - `simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release under `ANDROID_RELEASES_URL` (default `https://github.com/simhook/simhook`). The phone app polls the first address for updates; see `android/RELEASING.md`.

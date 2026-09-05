@@ -12,13 +12,13 @@ A send is one text to one or more recipients, sent from one phone. `POST /v1/mes
 |---|---|---|
 | `to` | string[] | Recipient numbers, ideally E.164 such as `+14155550123`. One to 5,000. The plan caps how many per send. |
 | `body` | string | The text, 1 to 1,600 characters. Long texts go out as concatenated SMS. |
-| `device_id` | string | Which phone. Defaults to the account's default phone, else the most recently online one. |
+| `device_id` | string | Which phone. Defaults to the account's default phone, else the enabled phone that checked in most recently. |
 | `sim_subscription_id` | integer | Which SIM on a dual-SIM phone. Unknown ids fall back to the phone's preferred SIM. |
 | `scheduled_at` | timestamp | Send later, up to seven days ahead. |
 
 ```sh
 curl https://api.simhook.dev/v1/messages \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '{
     "to": ["+15550001111", "+15550002222"],
@@ -33,12 +33,12 @@ The answer is `202` with a `batch`: the send record. Its counters (`dispatched_c
 
 | Status | Meaning |
 |---|---|
-| `queued` | Accepted by the server, waiting for the phone. |
-| `dispatched` | The phone has it and will send it at its pace. |
+| `queued` | Accepted by the server, waiting for the phone to fetch it. |
+| `dispatched` | The phone has fetched it and sends it at its pace. |
 | `sent` | The carrier accepted it from the phone. |
 | `delivered` | The carrier confirmed it reached the recipient's handset. |
 | `failed` | The phone could not send it, or the carrier reported a failure. `error_code` and `error_message` say why. |
-| `unknown` | No report arrived within the stale window. Rare; usually the phone lost power or signal mid-send. |
+| `unknown` | No report arrived. A fetched message is given up on fifteen minutes after the phone should have sent it, given its pacing; a message the phone never fetched is given up on a day after it was due. Rare; usually the phone lost power or signal mid-send. A report that arrives later still resolves it. |
 
 `sent` is what most SMS APIs call success. `delivered` is stronger: it is the carrier's delivery receipt, and some carriers and some recipients never produce one. Treat `sent` as done and `delivered` as a bonus, or wait for `delivered` when it matters.
 
@@ -46,7 +46,7 @@ Timestamps for each step are on the message: `dispatched_at`, `sent_at`, `delive
 
 ## Which phone, which SIM
 
-Each account has a default phone; the dashboard sets it, or `POST /v1/devices/{id}/default`. A send without `device_id` goes to the default phone if it is online, otherwise to the phone that checked in most recently. A send to a phone that is offline waits in its queue until it comes back.
+Each account has a default phone; the dashboard sets it, or `POST /v1/devices/{id}/default`. A send without `device_id` goes to the default phone, online or not, and otherwise to the enabled phone that checked in most recently. A send to a phone that is offline waits in its queue for up to a day until it comes back; the phone is woken by a push and fetches what it has to send.
 
 A phone lists its SIMs with their `subscription_id`. Pass one as `sim_subscription_id` to send from that SIM; leave it out to use the phone's preferred SIM, which you set per phone.
 
@@ -64,7 +64,7 @@ Pass `scheduled_at` to hold a send until then. It counts against the plan when i
 
 ## Limits and errors
 
-Plans limit messages per day and per month, phones per account, and recipients per send. A request over a limit is refused with `429` and a code that says which limit: `plan_limit_daily`, `plan_limit_monthly`, or `plan_limit_batch`. `GET /v1/stats` reports the account's usage against its plan.
+Plans limit messages per day and per month, phones per account, and recipients per send. A request over a limit is refused with `429` and a code that says which limit: `plan_limit_daily`, `plan_limit_monthly`, or `plan_limit_batch`. `GET /v1/auth/me` reports the account's limits and its usage this day and month; `GET /v1/stats` is the lifetime totals.
 
 Validation problems come back as `422` with a `validation_failed` code and a per-field list:
 

@@ -44,7 +44,7 @@ A reply is a normal send to the sender's number, from the same phone and SIM if 
 
 ```sh
 curl https://api.simhook.dev/v1/messages \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '{"to": ["+15550002222"], "body": "Yarın 14:00 ile 16:00 arası.", "device_id": "01a071d7-…", "sim_subscription_id": 1}'
 ```

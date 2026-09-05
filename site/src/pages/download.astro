@@ -1,18 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
+import { latestRelease, sizeLabel } from "../lib/release";
 
-// The current release, read from the manifest the app itself polls. Built
-// into the page, so a build with no network still produces a working page.
-const MANIFEST = "https://github.com/simhook/simhook/releases/latest/download/android.json";
-type Manifest = { version_name: string; version_code: number; sha256: string; size_bytes: number; released_at?: string; notes?: string | null };
-let m: Manifest | null = null;
-try {
-  const r = await fetch(MANIFEST, { redirect: "follow" });
-  if (r.ok) m = (await r.json()) as Manifest;
-} catch {
-  m = null;
-}
-const size = m ? `${(m.size_bytes / 1048576).toFixed(1)} MB` : null;
+const m = await latestRelease();
+const size = sizeLabel(m);
 const date = m?.released_at ? new Date(m.released_at).toISOString().slice(0, 10) : null;
 ---
 

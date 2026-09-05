@@ -30,7 +30,7 @@ Pass it in the `X-Api-Key` header. `Authorization: Bearer <key>` works too.
 
 ```sh
 curl https://api.simhook.dev/v1/messages \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '{"to": ["+15550001111"], "body": "Your code is 482913"}'
 ```
@@ -61,8 +61,8 @@ Acceptance is not delivery. The phone picks the message up within a second or tw
 Ask for the send, or for the message itself:
 
 ```sh
-curl https://api.simhook.dev/v1/batches/01a071d8-819e-78f7-ae4f-9f71156d265f -H "X-Api-Key: sh_live_..."
-curl "https://api.simhook.dev/v1/messages?batch_id=01a071d8-819e-78f7-ae4f-9f71156d265f" -H "X-Api-Key: sh_live_..."
+curl https://api.simhook.dev/v1/batches/01a071d8-819e-78f7-ae4f-9f71156d265f -H "X-Api-Key: sh_..."
+curl "https://api.simhook.dev/v1/messages?batch_id=01a071d8-819e-78f7-ae4f-9f71156d265f" -H "X-Api-Key: sh_..."
 ```
 
 A message moves through `queued`, `dispatched` (on the phone), `sent` (the carrier took it), and `delivered` (the carrier confirmed it reached the handset). It ends in `failed` if the phone could not send it, or `unknown` if no report ever came. [Sending](/docs/sending) has the details.
@@ -73,7 +73,7 @@ Every text the phone receives is forwarded to you. Add a webhook in the dashboar
 
 ```sh
 curl https://api.simhook.dev/v1/webhooks \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/sms-events", "events": ["message.received", "message.delivered", "message.failed"]}'
 ```

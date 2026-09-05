@@ -4,6 +4,10 @@
 	root * /srv
 	encode zstd gzip
 
+	# Every page has one address, without a trailing slash.
+	@trailing path_regexp trail ^/(.+)/$
+	redir @trailing /{re.trail.1} 308
+
 	# Clean addresses: /pricing serves pricing.html, /docs serves docs/index.html.
 	try_files {path}.html {path}/index.html {path}
 	file_server
@@ -15,8 +19,12 @@
 	}
 
 	# Hashed assets never change. Pages are revalidated on every visit (a 304
-	# costs nothing), so a deploy is visible the moment it lands.
-	header /_astro/* Cache-Control "public, max-age=31536000, immutable"
-	header /img/* Cache-Control "public, max-age=86400"
-	header Cache-Control "no-cache"
+	# costs nothing), so a deploy is visible the moment it lands. Each response
+	# matches exactly one of these, so none can override another.
+	@immutable path /_astro/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+	@images path /img/* /favicon.svg /favicon.png /apple-touch-icon.png
+	header @images Cache-Control "public, max-age=86400"
+	@pages not path /_astro/* /img/* /favicon.svg /favicon.png /apple-touch-icon.png
+	header @pages Cache-Control "no-cache"
 }

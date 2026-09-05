@@ -2,7 +2,7 @@
 
 TypeScript client for the [simhook](https://simhook.dev) API: send and receive SMS through your own Android phone.
 
-- No dependencies. Uses `fetch` and Web Crypto, so it runs on Node 20+, Bun, Deno, Cloudflare Workers, Vercel Edge, and in browsers.
+- No dependencies. Uses `fetch` and Web Crypto, so it runs on Node 20+, Bun, Deno, Cloudflare Workers, and Vercel Edge. It is for servers: an API key in a browser is a key given away.
 - Fully typed from the API's OpenAPI contract, including narrowed status and event names.
 - Auto-pagination, send polling, timeouts, and retries for reads built in.
 - Webhook signature verification and an SMS segment counter.

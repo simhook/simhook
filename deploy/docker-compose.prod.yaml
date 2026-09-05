@@ -64,6 +64,9 @@ services:
     build:
       context: ..
       dockerfile: site/Dockerfile
+      args:
+        PUBLIC_API_URL: https://${API_DOMAIN}
+        PUBLIC_APP_URL: https://${APP_DOMAIN}
     restart: unless-stopped
 
   caddy:

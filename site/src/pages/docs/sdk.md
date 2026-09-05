@@ -4,7 +4,7 @@ title: SDK
 description: "The TypeScript client for the simhook API. No dependencies, typed from the OpenAPI contract, runs anywhere fetch does."
 ---
 
-`@simhook/sdk` is a thin, typed client over `fetch`. It has no dependencies, so it runs on Node 20 and newer, Bun, Deno, Cloudflare Workers, Vercel Edge, and in browsers. Field names are the API's own, in snake_case.
+`@simhook/sdk` is a thin, typed client over `fetch`. It has no dependencies, so it runs on Node 20 and newer, Bun, Deno, Cloudflare Workers, and Vercel Edge. It is for servers: an API key in a browser is a key given away. Field names are the API's own, in snake_case.
 
 ```sh
 npm install @simhook/sdk

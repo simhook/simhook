@@ -72,6 +72,14 @@ const groups = tagOrder
   .filter((g) => g.ops.length > 0);
 
 const anchor = (o: Op) => `${o.method.toLowerCase()}-${o.path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`;
+// What a call needs, from the x-simhook-scope extension the API puts on every operation.
+const needs = (o: Op): string | null => {
+  const scope = o["x-simhook-scope"] as string | undefined;
+  if (!scope) return null;
+  if (scope === "session") return "a dashboard session; an API key cannot do this";
+  if (scope === "device") return "the phone's device token";
+  return `an API key with the ${scope} scope`;
+};
 const params = (o: Op) => (o.parameters ?? []) as Any[];
 const bodySchema = (o: Op) => o.requestBody?.content?.["application/json"]?.schema;
 const okCode = (o: Op) => Object.keys(o.responses ?? {}).find((c) => c.startsWith("2"));
@@ -88,7 +96,7 @@ const schemaNames = Object.keys(schemas).filter((n) => n !== "APIError").sort();
 
   <h2>Basics</h2>
   <p>The base URL is <code>https://api.simhook.dev</code> (or your own host). Requests and responses are JSON; timestamps are RFC 3339 in UTC; ids are UUIDs.</p>
-  <p>Authenticate with an API key from the dashboard in the <code>X-Api-Key</code> header. <code>Authorization: Bearer &lt;key&gt;</code> is accepted too. Keys carry scopes (<code>send</code>, <code>read</code>, <code>devices</code>, <code>webhooks</code>) and an endpoint refuses a key without the scope it needs.</p>
+  <p>Authenticate with an API key from the dashboard in the <code>X-Api-Key</code> header. <code>Authorization: Bearer &lt;key&gt;</code> is accepted too. Keys carry scopes (<code>send</code>, <code>read</code>, <code>devices</code>, <code>webhooks</code>) and an endpoint refuses a key without the scope it needs; each endpoint below says which. Account operations need a dashboard session and cannot be done with a key.</p>
   <p>Lists return <code>data</code> and a <code>next_cursor</code>; pass it back as <code>cursor</code> for the next page. <code>limit</code> defaults to 50.</p>
 
   <h3>Errors</h3>
@@ -127,6 +135,7 @@ const schemaNames = Object.keys(schemas).filter((n) => n !== "APIError").sort();
           <div class="op" id={anchor(o)}>
             <p class="sig"><b>{o.method}</b>{o.path}</p>
             <h3>{o.summary ?? o.operationId}</h3>
+            {needs(o) ? <p class="meta">needs {needs(o)}</p> : null}
             {o.description ? <p>{o.description}</p> : null}
             {ps.length > 0 ? (
               <>

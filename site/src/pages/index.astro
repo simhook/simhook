@@ -1,5 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
+import { latestRelease, sizeLabel } from "../lib/release";
+
+const release = await latestRelease();
+const size = sizeLabel(release);
 ---
 
 <Base title="simhook">
@@ -9,14 +13,14 @@ import Base from "../layouts/Base.astro";
   <div class="links">
     <a class="btn" href="https://app.simhook.dev/register">Start free</a>
     <a href="/download">Download the app</a>
-    <span class="meta">Android 8.0+, 2.2 MB, updates itself</span>
+    <span class="meta">Android 8.0+, {size ? `${size}, ` : ""}updates itself</span>
   </div>
 
   <section>
     <h2>send one</h2>
     <pre><code><span class="c"># any HTTP client, or the SDK, or an agent over MCP</span>
 curl https://api.simhook.dev/v1/messages \
-  -H "X-Api-Key: sh_live_..." \
+  -H "X-Api-Key: sh_..." \
   -H "Content-Type: application/json" \
   -d '&#123;"to": ["+15550001111"], "body": "Your code is 482913"&#125;'</code></pre>
     <pre><code><span class="c"># about two seconds later, at your server</span>
@@ -32,9 +36,9 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
     <ul class="plain">
       <li><b>Send and receive</b><span>Through your own SIM. Dual SIM works; pick one per message.</span></li>
       <li><b>Delivery receipts</b><span>Sent and delivered from the carrier, not guessed.</span></li>
-      <li><b>Webhooks</b><span>HMAC-signed, retried for a day, paused when your endpoint keeps failing.</span></li>
+      <li><b>Webhooks</b><span>HMAC-signed, retried for two days, paused when your endpoint keeps failing.</span></li>
       <li><b>Sends and scheduling</b><span>Up to 5,000 recipients in one call, a send time if you want one.</span></li>
-      <li><b>SDK and MCP server</b><span>Typed client for Node, edge, and browsers. Eight tools for agents.</span></li>
+      <li><b>SDK and MCP server</b><span>Typed client for Node and edge runtimes. Eight tools for agents.</span></li>
       <li><b>Self-hosting</b><span>One VPS, one compose file. AGPL-3.0.</span></li>
     </ul>
   </section>

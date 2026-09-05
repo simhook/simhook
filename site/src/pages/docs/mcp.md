@@ -19,7 +19,7 @@ Claude Desktop, Cursor, and most others (`claude_desktop_config.json`, `.cursor/
     "simhook": {
       "command": "npx",
       "args": ["-y", "@simhook/mcp"],
-      "env": { "SIMHOOK_API_KEY": "sh_live_..." }
+      "env": { "SIMHOOK_API_KEY": "sh_..." }
     }
   }
 }
@@ -28,7 +28,7 @@ Claude Desktop, Cursor, and most others (`claude_desktop_config.json`, `.cursor/
 Claude Code:
 
 ```sh
-claude mcp add simhook -e SIMHOOK_API_KEY=sh_live_... -- npx -y @simhook/mcp
+claude mcp add simhook -e SIMHOOK_API_KEY=sh_... -- npx -y @simhook/mcp
 ```
 
 Self-hosting? Add `SIMHOOK_BASE_URL` with your API origin.
@@ -63,6 +63,6 @@ import { createServer } from "@simhook/mcp";
 import { Simhook } from "@simhook/sdk";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const server = createServer({ client: new Simhook({ apiKey: "sh_live_..." }) });
+const server = createServer({ client: new Simhook({ apiKey: "sh_..." }) });
 await server.connect(new StdioServerTransport());
 ```

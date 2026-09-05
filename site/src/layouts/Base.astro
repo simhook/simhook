@@ -16,8 +16,9 @@ const {
   measure = "prose",
 } = Astro.props;
 
-const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) ?? "https://app.simhook.dev";
+const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) || "https://app.simhook.dev";
 const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
+const here = new URL(path === "/" ? "/" : path, Astro.site);
 const nav = [
   ["/docs", "Docs"],
   ["/pricing", "Pricing"],
@@ -34,11 +35,16 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="canonical" href={new URL(path === "/" ? "/" : path, Astro.site)} />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="canonical" href={here} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content={here} />
+    <meta property="og:site_name" content="simhook" />
+    <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#ffffff" />
     <script is:inline>
       // Runs before anything is painted. The API keeps a readable cookie
@@ -76,7 +82,7 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
       // follows the cookie: read again whenever the page is shown again
       // (back and forward restore pages without running them) and after
       // signing out here, which the API answers by clearing the cookie.
-      const api = (import.meta.env.PUBLIC_API_URL as string | undefined) ?? "https://api.simhook.dev";
+      const api = (import.meta.env.PUBLIC_API_URL as string | undefined) || "https://api.simhook.dev";
       const root = document.documentElement;
       const sync = () => {
         if (/(^|;\s*)simhook_signed_in=/.test(document.cookie)) root.dataset.session = "in";

@@ -49,7 +49,7 @@ Both are off until their keys are set in `deploy/api.env`; the sign-in page adap
 - `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets. Losing it means every webhook needs a new secret. Keep a copy off the host.
 - The API, the dashboard, and the site must share a parent domain (`api.` and `app.` under your root domain, which the Compose file assumes). The API sets a readable signed-in flag cookie on that domain so the site and the dashboard know who is signed in before asking. If your dashboard has to live elsewhere, leave `SIMHOOK_COOKIE_DOMAIN` empty on the API and set `SIMHOOK_SESSION_FLAG=off` on the dashboard.
 - The `backup` service writes a dump every day into `deploy/backups`. Copy that directory somewhere else on a schedule; a backup on the same disk is not a backup.
-- Update with `git pull` and `docker compose up -d --build`, or pull the images the repository's CI publishes to GitHub's registry.
+- Update with `git pull` and `docker compose up -d --build`. The `api` image CI publishes to GitHub's registry works anywhere; the `web` and `site` images are built with simhook.dev's addresses baked in, so build those two yourself, which `--build` does.
 
 ## The license, briefly
 
