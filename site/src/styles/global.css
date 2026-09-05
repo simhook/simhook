@@ -64,6 +64,10 @@ nav.top a { text-decoration: none; color: var(--muted); }
 nav.top a:hover, nav.top a[aria-current="page"] { color: var(--fg); }
 nav.top .wm { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--fg); margin-right: 4px; }
 nav.top .right { margin-left: auto; display: flex; gap: 18px; }
+/* One bar, two states, decided before first paint by the html attribute. */
+nav.top .when-in { display: none; }
+html[data-session="in"] nav.top .when-in { display: inline; }
+html[data-session="in"] nav.top .when-out { display: none; }
 
 footer.bottom {
   margin-top: 72px;

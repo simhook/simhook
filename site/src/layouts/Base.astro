@@ -39,13 +39,24 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#ffffff" />
+    <script is:inline>
+      // Runs before anything is painted: if this browser was signed in the last
+      // time it asked, draw the bar that way from the first frame.
+      try {
+        if (localStorage.getItem("simhook:session") === "in") document.documentElement.dataset.session = "in";
+      } catch {}
+    </script>
   </head>
   <body>
     <div class="page">
       <nav class="top" aria-label="Main">
         <a class="wm" href="/">simhook</a>
         <span class="links">{nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}</span>
-        <span class="right"><a href="https://app.simhook.dev/login">Sign in</a></span>
+        <span class="right">
+          <a class="when-out" href="https://app.simhook.dev/login">Sign in</a>
+          <a class="when-in" href="https://app.simhook.dev/dashboard">Dashboard</a>
+          <a class="when-in" href="#" data-signout>Sign out</a>
+        </span>
       </nav>
       <main class:list={[`measure-${measure}`]}>
         <slot />
@@ -61,29 +72,25 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     </div>
     <script>
       // The page is static, but the visitor may be signed in to the app. Ask the
-      // API once; if so, the bar offers the dashboard and signing out instead of
-      // signing in. Nothing changes when the API says no or cannot be reached.
+      // API once per page, remember the answer for the next page, and only touch
+      // the bar when the answer differs from what is already drawn.
       const api = (import.meta.env.PUBLIC_API_URL as string | undefined) ?? "https://api.simhook.dev";
-      const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) ?? "https://app.simhook.dev";
-      const right = document.querySelector("nav.top .right");
-      if (right) {
-        fetch(`${api}/v1/auth/me`, { credentials: "include" })
-          .then((r) => {
-            if (!r.ok) return;
-            const dashboard = document.createElement("a");
-            dashboard.href = `${app}/dashboard`;
-            dashboard.textContent = "Dashboard";
-            const out = document.createElement("a");
-            out.href = "#";
-            out.textContent = "Sign out";
-            out.addEventListener("click", (e) => {
-              e.preventDefault();
-              fetch(`${api}/v1/auth/logout`, { method: "POST", credentials: "include" }).finally(() => location.reload());
-            });
-            right.replaceChildren(dashboard, out);
-          })
-          .catch(() => {});
-      }
+      const root = document.documentElement;
+      const remember = (state: "in" | "out") => {
+        if (state === "in") root.dataset.session = "in";
+        else delete root.dataset.session;
+        try {
+          localStorage.setItem("simhook:session", state);
+        } catch {}
+      };
+      fetch(`${api}/v1/auth/me`, { credentials: "include" })
+        .then((r) => remember(r.ok ? "in" : "out"))
+        .catch(() => {});
+      document.querySelector("[data-signout]")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        remember("out");
+        fetch(`${api}/v1/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+      });
     </script>
   </body>
 </html>
