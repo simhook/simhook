@@ -30,6 +30,7 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
    cp .env.example .env          # domains, Cloudflare token, database password
    cp api.env.example api.env    # secret key, SMTP, admin email
    mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
+   chown 10001:10001 secrets/fcm.json && chmod 400 secrets/fcm.json   # the API runs as uid 10001
    openssl rand -base64 32       # value for SIMHOOK_SECRET_KEY
    openssl rand -hex 24          # value for POSTGRES_PASSWORD
    ```

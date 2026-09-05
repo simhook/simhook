@@ -6,7 +6,9 @@ package push
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	firebase "firebase.google.com/go/v4"
@@ -51,6 +53,11 @@ type fcmSender struct {
 // NewFCM builds a Sender backed by Firebase Cloud Messaging using a
 // service-account credentials file.
 func NewFCM(ctx context.Context, credentialsFile string) (Sender, error) {
+	// The SDK falls back to ambient credentials when the file cannot be read,
+	// which surfaces later as a confusing "project ID is required" error.
+	if _, err := os.ReadFile(credentialsFile); err != nil {
+		return nil, fmt.Errorf("push: credentials file: %w", err)
+	}
 	app, err := firebase.NewApp(ctx, nil, option.WithCredentialsFile(credentialsFile))
 	if err != nil {
 		return nil, err
