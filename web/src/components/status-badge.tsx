@@ -1,27 +1,28 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { statusTone } from "@/lib/format";
 
-const toneClass: Record<ReturnType<typeof statusTone>, string> = {
-  ok: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
-  warn: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  bad: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
-  muted: "border-border bg-muted text-muted-foreground",
+const dotClass: Record<ReturnType<typeof statusTone>, string> = {
+  ok: "bg-ok",
+  warn: "bg-warn",
+  bad: "bg-destructive",
+  muted: "bg-[#c9c9c5]",
 };
 
+/** A status is a dot next to a word. */
 export function StatusBadge({ status, label, className }: { status: string; label?: string; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("font-medium capitalize", toneClass[statusTone(status)], className)}>
+    <span className={cn("inline-flex items-center gap-2 whitespace-nowrap text-sm", className)}>
+      <span className={cn("size-[7px] shrink-0 rounded-full", dotClass[statusTone(status)])} />
       {label ?? status}
-    </Badge>
+    </span>
   );
 }
 
-/** A small presence dot with text, for devices. */
+/** Presence, for phones. */
 export function OnlineDot({ online }: { online: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm">
-      <span className={cn("size-2 rounded-full", online ? "bg-emerald-500" : "bg-muted-foreground/40")} />
+    <span className="inline-flex items-center gap-2 text-sm">
+      <span className={cn("size-[7px] rounded-full", online ? "bg-ok" : "bg-[#c9c9c5]")} />
       {online ? "Online" : "Offline"}
     </span>
   );

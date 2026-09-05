@@ -160,7 +160,7 @@ export default function DevicePage() {
     <>
       <Button variant="ghost" size="sm" className="mb-3 -ml-2 gap-1 text-muted-foreground" nativeButton={false} render={<Link href="/devices" />}>
         <ArrowLeft className="size-4" />
-        Devices
+        Phones
       </Button>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>

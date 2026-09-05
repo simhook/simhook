@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Smartphone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { OnlineDot } from "@/components/status-badge";
@@ -21,21 +19,16 @@ export default function DevicesPage() {
   return (
     <>
       <PageHeader
-        title="Devices"
-        description="Phones paired with this account. Sends go out from the default device unless a request names one."
-        actions={
-          <Button onClick={() => setPairing(true)} className="gap-1.5">
-            <Plus className="size-4" />
-            Pair a phone
-          </Button>
-        }
+        title="Phones"
+        description="Phones paired with this account. Sends go out from the default phone unless a request names one."
+        actions={<Button onClick={() => setPairing(true)}>Pair a phone</Button>}
       />
       <PairDialog open={pairing} onOpenChange={setPairing} />
 
       {devices.isPending ? (
         <div className="grid gap-3">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
         </div>
       ) : list.length === 0 ? (
         <EmptyState
@@ -44,38 +37,30 @@ export default function DevicesPage() {
           action={<Button onClick={() => setPairing(true)}>Pair a phone</Button>}
         />
       ) : (
-        <div className="grid gap-3">
+        <ul className="border-t">
           {list.map((d) => (
-            <Card key={d.id} className="transition-colors hover:bg-muted/40">
-              <CardContent className="flex flex-wrap items-center gap-4 py-4">
-                <span className="grid size-10 shrink-0 place-items-center rounded-md bg-muted">
-                  <Smartphone className="size-5 text-muted-foreground" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/devices/${d.id}`} className="font-medium hover:underline">
-                      {d.name}
-                    </Link>
-                    {d.is_default ? <Badge variant="secondary">Default</Badge> : null}
-                    {!d.enabled ? <Badge variant="outline">Disabled</Badge> : null}
-                    {d.push_token_invalidated_at ? <Badge variant="destructive">Needs the app opened</Badge> : null}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {[d.brand, d.model].filter(Boolean).join(" ")}
-                    {d.os_version ? ` · Android ${d.os_version}` : ""} · last check-in {relativeTime(d.last_heartbeat_at)}
-                  </p>
+            <li key={d.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b py-3.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={`/devices/${d.id}`} className="font-medium hover:underline">
+                    {d.name}
+                  </Link>
+                  {d.is_default ? <Badge variant="secondary">default</Badge> : null}
+                  {!d.enabled ? <Badge variant="outline">disabled</Badge> : null}
+                  {d.push_token_invalidated_at ? <Badge variant="destructive">needs the app opened</Badge> : null}
                 </div>
-                <div className="flex items-center gap-6 text-sm">
-                  <div className="text-right">
-                    <p className="tabular-nums">{formatCount(d.sent_count)} sent</p>
-                    <p className="tabular-nums text-muted-foreground">{formatCount(d.received_count)} received</p>
-                  </div>
-                  <OnlineDot online={d.online} />
-                </div>
-              </CardContent>
-            </Card>
+                <p className="text-sm text-muted-foreground">
+                  {[d.brand, d.model].filter(Boolean).join(" ")}
+                  {d.os_version ? `, Android ${d.os_version}` : ""}, last check-in {relativeTime(d.last_heartbeat_at)}
+                </p>
+              </div>
+              <p className="font-mono text-xs text-muted-foreground tabular-nums">
+                {formatCount(d.sent_count)} sent, {formatCount(d.received_count)} received
+              </p>
+              <OnlineDot online={d.online} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </>
   );

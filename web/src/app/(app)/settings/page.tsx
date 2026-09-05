@@ -120,13 +120,13 @@ export default function SettingsPage() {
                     <TableHead>Per day</TableHead>
                     <TableHead>Per month</TableHead>
                     <TableHead>Per send</TableHead>
-                    <TableHead>Devices</TableHead>
+                    <TableHead>Phones</TableHead>
                     <TableHead className="text-right">Price</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(plans.data?.data ?? []).map((p) => (
-                    <TableRow key={p.id} className={cn(p.id === limits?.plan_id && "bg-primary/5")}>
+                    <TableRow key={p.id} className={cn(p.id === limits?.plan_id && "bg-muted")}>
                       <TableCell className="font-medium">
                         {p.name}
                         {p.id === limits?.plan_id ? <Badge variant="secondary" className="ml-2">current</Badge> : null}

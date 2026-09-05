@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, Circle } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { OnlineDot, StatusBadge } from "@/components/status-badge";
@@ -12,29 +10,43 @@ import { cn } from "@/lib/utils";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
-      </CardHeader>
-      {hint ? <CardContent className="pt-0 text-sm text-muted-foreground">{hint}</CardContent> : null}
-    </Card>
+    <div>
+      <p className="text-[26px] font-medium leading-none tabular-nums tracking-tight">{value}</p>
+      <p className="mt-2 font-mono text-xs text-muted-foreground">{label}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
   );
 }
 
-function UsageBar({ used, limit }: { used: number; limit: number }) {
-  if (limit < 0) return <p className="text-sm text-muted-foreground">{formatCount(used)} sent · unlimited</p>;
-  const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
+function UsageLine({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const unlimited = limit < 0;
+  const pct = unlimited ? 0 : Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
   return (
     <div>
-      <div className="mb-1 flex justify-between text-sm">
-        <span>{formatCount(used)} of {formatCount(limit)}</span>
-        <span className="text-muted-foreground">{pct}%</span>
+      <div className="flex justify-between text-sm">
+        <span>{label}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {formatCount(used)} {unlimited ? "sent, unlimited" : `of ${formatCount(limit)}`}
+        </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full", pct >= 90 ? "bg-destructive" : "bg-primary")} style={{ width: `${pct}%` }} />
-      </div>
+      {!unlimited ? (
+        <div className="mt-1.5 h-px w-full bg-border">
+          <div className={cn("h-px", pct >= 90 ? "bg-destructive" : "bg-foreground")} style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="mb-10">
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <h2 className="font-mono text-xs tracking-wide text-muted-foreground">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -50,132 +62,145 @@ export default function DashboardPage() {
   const limits = me.data?.limits;
   const usage = me.data?.usage;
   const deviceList = devices.data?.data ?? [];
+  const online = deviceList.filter((d) => d.online);
+  const hookList = hooks.data?.data ?? [];
   const steps = [
     { done: !!user?.email_verified_at, label: "Verify your email", href: "/verify-email" },
     { done: deviceList.length > 0, label: "Pair an Android phone", href: "/devices" },
     { done: (keys.data?.data.length ?? 0) > 0, label: "Create an API key", href: "/api-keys" },
     { done: (stats.data?.sent ?? 0) > 0, label: "Send your first message", href: "/messages" },
-    { done: (hooks.data?.data.length ?? 0) > 0, label: "Add a webhook to receive events", href: "/webhooks" },
+    { done: hookList.length > 0, label: "Add a webhook to receive events", href: "/webhooks" },
   ];
   const remaining = steps.filter((s) => !s.done).length;
   const recentMessages = recent.data?.pages.flatMap((p) => p.data) ?? [];
 
+  const status = (() => {
+    if (!devices.data) return "";
+    if (deviceList.length === 0) return "No phone is paired yet, so nothing can be sent.";
+    const first = online[0] ?? deviceList[0];
+    const parts = [
+      online.length === 0
+        ? `${first.name} is offline; last seen ${relativeTime(first.last_heartbeat_at)}.`
+        : online.length === 1
+          ? `${first.name} is online.`
+          : `${online.length} phones are online.`,
+    ];
+    if (usage) parts.push(`${formatCount(usage.sent_today)} sent today.`);
+    return parts.join(" ");
+  })();
+
   return (
     <>
-      <PageHeader title={`Hello${user?.name ? `, ${user.name.split(" ")[0]}` : ""}`} description="Here is how your gateway is doing." />
+      <PageHeader title="Overview" description={status} />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Messages sent" value={formatCount(stats.data?.sent)} />
-        <Stat label="Messages received" value={formatCount(stats.data?.received)} />
-        <Stat
-          label="Devices"
-          value={formatCount(stats.data?.devices)}
-          hint={`${deviceList.filter((d) => d.online).length} online · ${limits ? limitLabel(limits.device_limit) : "…"} allowed`}
-        />
+      <div className="mb-10 grid grid-cols-2 gap-8 sm:grid-cols-4">
+        <Stat label="sent" value={formatCount(stats.data?.sent)} />
+        <Stat label="received" value={formatCount(stats.data?.received)} />
+        <Stat label="phones" value={formatCount(stats.data?.devices)} hint={`${online.length} online, ${limits ? limitLabel(limits.device_limit) : "…"} allowed`} />
+        <Stat label="webhooks" value={formatCount(hookList.length)} hint={hookList.some((h) => !h.enabled) ? "one is paused" : undefined} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="grid gap-6 lg:col-span-2">
-          {remaining > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Get started</CardTitle>
-                <CardDescription>{remaining} of {steps.length} steps left.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-1">
-                {steps.map((s) => (
-                  <Link
-                    key={s.label}
-                    href={s.href}
-                    className={cn("flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted", s.done && "text-muted-foreground line-through")}
-                  >
-                    {s.done ? <Check className="size-4 text-emerald-600" /> : <Circle className="size-4 text-muted-foreground/50" />}
-                    <span className="flex-1">{s.label}</span>
-                    {!s.done ? <ArrowRight className="size-4 text-muted-foreground" /> : null}
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
+      {remaining > 0 ? (
+        <Section title={`get started, ${remaining} of ${steps.length} left`}>
+          <ul className="border-t">
+            {steps.map((s) => (
+              <li key={s.label} className="border-b">
+                <Link
+                  href={s.href}
+                  className={cn("flex items-center gap-3 py-2.5 text-sm", s.done ? "text-muted-foreground line-through" : "hover:underline")}
+                >
+                  <span className={cn("size-[7px] rounded-full", s.done ? "bg-ok" : "bg-[#c9c9c5]")} />
+                  {s.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
 
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>Recent messages</CardTitle>
-                <CardDescription>Both directions, newest first.</CardDescription>
-              </div>
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/messages" />}>
-                View all
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {recentMessages.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing yet. Pair a phone and send your first message.</p>
-              ) : (
-                <ul className="divide-y">
-                  {recentMessages.map((m) => (
-                    <li key={m.id} className="flex items-center gap-3 py-2 text-sm">
-                      <span className="w-14 shrink-0 text-xs uppercase text-muted-foreground">{m.direction === "outbound" ? "to" : "from"}</span>
-                      <span className="w-36 shrink-0 truncate font-mono text-xs">{m.direction === "outbound" ? m.recipient : m.sender}</span>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{truncate(m.body, 80)}</span>
+      <Section
+        title="recent messages"
+        aside={
+          <Link href="/messages" className="text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+            All messages
+          </Link>
+        }
+      >
+        {recentMessages.length === 0 ? (
+          <p className="border-y py-6 text-sm text-muted-foreground">Nothing yet. Pair a phone and send your first message.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {recentMessages.map((m) => (
+                  <tr key={m.id} className="border-b">
+                    <td className="w-6 py-2.5 pr-3 font-mono text-xs text-muted-foreground">{m.direction === "outbound" ? "→" : "←"}</td>
+                    <td className="py-2.5 pr-4 font-mono text-xs whitespace-nowrap">{m.direction === "outbound" ? m.recipient : m.sender}</td>
+                    <td className="max-w-[360px] truncate py-2.5 pr-4 text-muted-foreground">{truncate(m.body, 80)}</td>
+                    <td className="py-2.5 pr-4 whitespace-nowrap">
                       <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} />
-                      <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">{relativeTime(m.created_at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-xs whitespace-nowrap text-muted-foreground">{relativeTime(m.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Plan usage</CardTitle>
-              <CardDescription>{limits ? `${limits.plan_name} plan` : "…"}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {limits && usage ? (
-                <>
-                  <div>
-                    <p className="mb-1 text-sm font-medium">Today</p>
-                    <UsageBar used={usage.sent_today} limit={limits.daily_limit} />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-sm font-medium">This month</p>
-                    <UsageBar used={usage.sent_this_month} limit={limits.monthly_limit} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.</p>
-                </>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Devices</CardTitle>
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/devices" />}>
-                Manage
+      <div className="grid gap-x-12 md:grid-cols-2">
+        <Section
+          title="phones"
+          aside={
+            <Link href="/devices" className="text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+              Manage
+            </Link>
+          }
+        >
+          {deviceList.length === 0 ? (
+            <div className="border-y py-6 text-sm">
+              <p className="text-muted-foreground">No phone paired yet.</p>
+              <Button className="mt-3" nativeButton={false} render={<Link href="/devices" />}>
+                Pair a phone
               </Button>
-            </CardHeader>
-            <CardContent>
-              {deviceList.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No phone paired yet.</p>
-              ) : (
-                <ul className="grid gap-2">
-                  {deviceList.map((d) => (
-                    <li key={d.id} className="flex items-center justify-between text-sm">
-                      <Link href={`/devices/${d.id}`} className="truncate font-medium hover:underline">
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody>
+                {deviceList.map((d) => (
+                  <tr key={d.id} className="border-b">
+                    <td className="py-2.5 pr-4">
+                      <Link href={`/devices/${d.id}`} className="hover:underline">
                         {d.name}
                       </Link>
+                      {d.is_default ? <span className="ml-2 font-mono text-[11px] text-muted-foreground">default</span> : null}
+                    </td>
+                    <td className="py-2.5 pr-4 text-muted-foreground">{relativeTime(d.last_heartbeat_at)}</td>
+                    <td className="py-2.5 text-right">
                       <OnlineDot online={d.online} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Section>
+
+        <Section title={limits ? `${limits.plan_name.toLowerCase()} plan` : "plan"}>
+          {limits && usage ? (
+            <div className="grid gap-4 border-t pt-4">
+              <UsageLine label="Today" used={usage.sent_today} limit={limits.daily_limit} />
+              <UsageLine label="This month" used={usage.sent_this_month} limit={limits.monthly_limit} />
+              <p className="text-xs text-muted-foreground">
+                Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.{" "}
+                <Link href="/settings" className="underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+                  Plans
+                </Link>
+              </p>
+            </div>
+          ) : null}
+        </Section>
       </div>
     </>
   );
