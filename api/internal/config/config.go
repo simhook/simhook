@@ -36,7 +36,6 @@ type Config struct {
 	SMTPUser     string `env:"SIMHOOK_SMTP_USER"`
 	SMTPPassword string `env:"SIMHOOK_SMTP_PASSWORD"`
 	SMTPFrom     string `env:"SIMHOOK_SMTP_FROM" envDefault:"simhook <noreply@localhost>"`
-	AdminEmail   string `env:"SIMHOOK_ADMIN_EMAIL"`
 
 	DispatchWaveSize         int `env:"SIMHOOK_DISPATCH_WAVE_SIZE" envDefault:"40"`
 	PushTTLSeconds           int `env:"SIMHOOK_PUSH_TTL_SECONDS" envDefault:"86400"`

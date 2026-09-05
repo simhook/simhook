@@ -41,3 +41,7 @@ keystore.properties
 
 # Local editor/agent config
 .claude/
+
+# Astro build metadata
+.astro/
+next-env.d.ts

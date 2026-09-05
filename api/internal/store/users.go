@@ -96,18 +96,6 @@ func (s *Store) TouchLogin(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-// SetOnboarding stores dashboard onboarding progress.
-func (s *Store) SetOnboarding(ctx context.Context, id uuid.UUID, state json.RawMessage) error {
-	_, err := s.q.Exec(ctx, `update users set onboarding = $2 where id = $1`, id, state)
-	return err
-}
-
-// RequestDeletion records a deletion request.
-func (s *Store) RequestDeletion(ctx context.Context, id uuid.UUID, reason *string) error {
-	_, err := s.q.Exec(ctx, `update users set deletion_requested_at = now(), deletion_reason = $2 where id = $1`, id, reason)
-	return err
-}
-
 // ---------------------------------------------------------------------------
 // One-time codes
 // ---------------------------------------------------------------------------
@@ -236,11 +224,6 @@ func (s *Store) ListAPIKeys(ctx context.Context, userID uuid.UUID, includeRevoke
 		select `+apiKeyCols+` from api_keys
 		where user_id = $1 and ($2 or revoked_at is null)
 		order by created_at desc`, userID, includeRevoked))
-}
-
-// GetUserAPIKey fetches one of the user's keys.
-func (s *Store) GetUserAPIKey(ctx context.Context, userID, id uuid.UUID) (APIKey, error) {
-	return one[APIKey](s.q.Query(ctx, `select `+apiKeyCols+` from api_keys where id = $1 and user_id = $2`, id, userID))
 }
 
 // RevokeAPIKey disables a key but keeps its record.

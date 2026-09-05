@@ -21,7 +21,6 @@ object Notifications {
     const val CHANNEL_UPDATES = "updates"
     const val ID_GATEWAY = 1
     const val ID_ALERT_PAIRING = 2
-    const val ID_ALERT_PERMISSION = 3
     const val ID_UPDATE_AVAILABLE = 4
     const val ID_UPDATE_READY = 5
 

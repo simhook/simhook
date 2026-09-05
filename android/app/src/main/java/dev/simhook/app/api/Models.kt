@@ -2,7 +2,6 @@ package dev.simhook.app.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 /** The device record as the server holds it. Fields the app does not use are ignored. */
 @Serializable
@@ -141,7 +140,3 @@ data class ApiErrorBody(
 
 @Serializable
 data class FieldError(val field: String? = null, val message: String)
-
-/** Ignored wrapper so callers can decode arbitrary JSON when needed. */
-@Serializable
-data class AnyJson(val value: JsonElement)

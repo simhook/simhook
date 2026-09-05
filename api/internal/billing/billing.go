@@ -77,22 +77,3 @@ func (s *Service) ReserveSends(ctx context.Context, tx *store.Store, userID uuid
 	}
 	return nil
 }
-
-// CheckDeviceLimit rejects pairing beyond the plan's device count.
-func (s *Service) CheckDeviceLimit(ctx context.Context, userID uuid.UUID) error {
-	limits, err := s.st.EffectiveLimits(ctx, userID)
-	if err != nil {
-		return err
-	}
-	if limits.DeviceLimit < 0 {
-		return nil
-	}
-	n, err := s.st.CountLiveDevices(ctx, userID)
-	if err != nil {
-		return err
-	}
-	if int32(n) >= limits.DeviceLimit {
-		return &LimitError{Kind: "devices", Limit: limits.DeviceLimit, Used: int32(n)}
-	}
-	return nil
-}

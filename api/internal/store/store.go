@@ -42,14 +42,6 @@ func (s *Store) WithTx(tx pgx.Tx) *Store {
 	return &Store{q: tx, pool: s.pool}
 }
 
-// Begin starts a transaction on the underlying pool.
-func (s *Store) Begin(ctx context.Context) (pgx.Tx, error) {
-	return s.pool.Begin(ctx)
-}
-
-// Pool exposes the pool for components that need it directly (the job queue).
-func (s *Store) Pool() *pgxpool.Pool { return s.pool }
-
 // Tx runs fn inside a transaction, committing on nil error.
 func (s *Store) Tx(ctx context.Context, fn func(tx pgx.Tx, st *Store) error) error {
 	tx, err := s.pool.Begin(ctx)

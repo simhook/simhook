@@ -6,7 +6,6 @@ import dev.simhook.app.api.ApiClient
 import dev.simhook.app.api.Device
 import dev.simhook.app.api.DevicePatch
 import dev.simhook.app.api.PairRequest
-import dev.simhook.app.core.AppSettings
 import dev.simhook.app.core.DeviceIdentity
 import dev.simhook.app.core.Notifications
 import dev.simhook.app.core.SecureStore
@@ -129,8 +128,4 @@ class AppContainer(private val context: Context) {
         unpairLocally()
         notifyPairingLost(context)
     }
-
-    val isPaired: suspend () -> Boolean = { settings.current().isPaired }
-
-    fun currentSettingsBlocking(): AppSettings = kotlinx.coroutines.runBlocking { settings.current() }
 }

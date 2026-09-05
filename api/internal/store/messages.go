@@ -262,12 +262,6 @@ func (s *Store) ApplyBatchTransition(ctx context.Context, batchID uuid.UUID, fro
 		returning `+batchCols, batchID))
 }
 
-// FailBatch records a batch-level failure (nothing could be queued).
-func (s *Store) FailBatch(ctx context.Context, batchID uuid.UUID, reason string) error {
-	_, err := s.q.Exec(ctx, `update batches set status = 'failed', error = $2, completed_at = now() where id = $1`, batchID, reason)
-	return err
-}
-
 // ---------------------------------------------------------------------------
 // Inbound
 // ---------------------------------------------------------------------------

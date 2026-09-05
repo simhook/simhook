@@ -14,7 +14,7 @@ packages/
   sdk/       @simhook/sdk, the TypeScript client
   mcp/       @simhook/mcp, an MCP server for AI agents
 deploy/      docker compose, reverse proxy, service units
-docs/        architecture study, decisions
+docs/        decisions
 ```
 
 ## Development
@@ -40,7 +40,7 @@ The JavaScript packages share one pnpm workspace:
 
 ```
 pnpm install
-pnpm build      # dashboard, SDK, and MCP server
+pnpm build      # dashboard, site, SDK, and MCP server
 pnpm test       # SDK and MCP server test suites
 pnpm contracts  # regenerate TypeScript types after changing the API
 ```
@@ -59,6 +59,6 @@ Security reports: see [SECURITY.md](SECURITY.md).
 
 ## Deploying
 
-One host, Docker Compose, Cloudflare in front. The runbook is `deploy/README.md`; the same files work for self-hosting. CI builds container images for the API and dashboard on every push to main.
+One host, Docker Compose, Cloudflare in front. The runbook is `deploy/README.md`; the same files work for self-hosting. CI builds container images for the API, the dashboard, and the site on every push to main.
 
 See `docs/decisions.md` for the why behind the stack.
