@@ -1,12 +1,15 @@
 package dev.simhook.app.work
 
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -14,6 +17,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import dev.simhook.app.AppContainer
 import dev.simhook.app.BuildConfig
 import dev.simhook.app.SimhookApp
 import dev.simhook.app.api.ApiException
@@ -23,6 +27,9 @@ import dev.simhook.app.api.StatusReport
 import dev.simhook.app.core.DeviceIdentity
 import dev.simhook.app.core.Notifications
 import dev.simhook.app.core.TelemetryCollector
+import dev.simhook.app.gateway.GatewayService
+import dev.simhook.app.outbox.OutboxDrainer
+import dev.simhook.app.outbox.OutboxMessage
 import dev.simhook.app.push.Push
 import dev.simhook.app.sms.SimInfo
 import java.io.IOException
@@ -40,11 +47,111 @@ private fun retryOrFail(e: Exception, attempt: Int, maxAttempts: Int): androidx.
     else -> androidx.work.ListenableWorker.Result.retry()
 }
 
+/**
+ * What an expedited worker shows while it runs as a foreground service,
+ * which is how Android 8 to 11 run expedited work. Without this, those
+ * versions drop the work on the floor.
+ */
+private fun syncForeground(context: Context, text: String): ForegroundInfo {
+    val notification = Notifications.gateway(context, "simhook", text)
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        ForegroundInfo(Notifications.ID_SYNC, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    } else {
+        ForegroundInfo(Notifications.ID_SYNC, notification)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The outbox: fetched from the server, then sent
+// ---------------------------------------------------------------------------
+
+/** Fetches what the server holds for this phone and gets it sent. */
+object OutboxSync {
+    /** Returns how many messages are waiting to be sent afterwards. */
+    suspend fun run(context: Context, container: AppContainer): Int {
+        val items = container.api.outbox()
+        if (items.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            container.outbox.insertAll(
+                items.map {
+                    OutboxMessage(id = it.id, batchId = it.batchId ?: "", to = it.to, body = it.body, simSubscriptionId = it.simSubscriptionId, createdAt = now)
+                },
+            )
+        }
+        val pending = container.outbox.pendingCount()
+        if (pending > 0) GatewayService.startOrDrain(context)
+        return pending
+    }
+}
+
+/** Runs the outbox fetch when a push says there is something to send. */
+class OutboxSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Checking for messages to send")
+
+    override suspend fun doWork(): Result {
+        val container = SimhookApp.get(applicationContext).container
+        if (!container.settings.current().isPaired) return Result.success()
+        return try {
+            OutboxSync.run(applicationContext, container)
+            Result.success()
+        } catch (e: ApiException) {
+            if (e.isAuthFailure) {
+                container.handleLostPairing()
+                return Result.failure()
+            }
+            retryOrFail(e, runAttemptCount, 5)
+        } catch (e: IOException) {
+            retryOrFail(e, runAttemptCount, 5)
+        }
+    }
+
+    companion object {
+        fun enqueue(context: Context) {
+            val request = OneTimeWorkRequestBuilder<OutboxSyncWorker>()
+                .setConstraints(networkConstraints)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
+                .build()
+            // A push that arrives while a sync runs queues another one behind it.
+            WorkManager.getInstance(context).enqueueUniqueWork("outbox-sync", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        }
+    }
+}
+
+/**
+ * Sends the outbox from a worker when the system refused to start the
+ * foreground service. Bounded, because expedited work has a budget; what
+ * is left queues another run.
+ */
+class OutboxDrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Sending messages")
+
+    override suspend fun doWork(): Result {
+        val container = SimhookApp.get(applicationContext).container
+        val remaining = OutboxDrainer.drain(applicationContext, container, deadlineMillis = System.currentTimeMillis() + BUDGET_MS) {}
+        if (remaining) enqueue(applicationContext, expedited = false)
+        return Result.success()
+    }
+
+    companion object {
+        private const val BUDGET_MS = 8 * 60_000L
+
+        fun enqueue(context: Context, expedited: Boolean = true) {
+            val builder = OneTimeWorkRequestBuilder<OutboxDrainWorker>()
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
+            if (expedited) builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            WorkManager.getInstance(context).enqueueUniqueWork("outbox-drain", ExistingWorkPolicy.KEEP, builder.build())
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Heartbeat
 // ---------------------------------------------------------------------------
 
 class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Checking in with the server")
+
     override suspend fun doWork(): Result {
         val container = SimhookApp.get(applicationContext).container
         val settings = container.settings.current()
@@ -64,6 +171,9 @@ class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWor
             container.applyServerDevice(device)
             container.settings.setLastHeartbeat(System.currentTimeMillis())
             if (token != null) container.settings.setPushToken(token)
+            // A check-in also picks up anything waiting to be sent, so a phone
+            // that missed a push still sends within one interval.
+            runCatching { OutboxSync.run(applicationContext, container) }
             Result.success()
         } catch (e: ApiException) {
             if (e.isAuthFailure) {
@@ -157,6 +267,8 @@ class StatusReportWorker(context: Context, params: WorkerParameters) : Coroutine
 // ---------------------------------------------------------------------------
 
 class InboundUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Forwarding a received text")
+
     override suspend fun doWork(): Result {
         val sender = inputData.getString(KEY_SENDER) ?: return Result.failure()
         val body = inputData.getString(KEY_BODY) ?: return Result.failure()

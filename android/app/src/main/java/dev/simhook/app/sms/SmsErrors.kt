@@ -43,9 +43,29 @@ object SmsErrors {
         return if (radioError != null && radioError > 0) base.copy(message = "${base.message} (radio code $radioError)") else base
     }
 
-    fun forDeliveryResult(resultCode: Int): SmsFailure? = when (resultCode) {
-        Activity.RESULT_OK -> null
-        Activity.RESULT_CANCELED -> null // no delivery report from this carrier; not a failure
+    enum class DeliveryOutcome { Delivered, Pending, Failed }
+
+    /**
+     * What a delivery report means. The status report PDU carries the
+     * carrier's TP-Status (3GPP TS 23.040): 0x00 to 0x1F is delivered,
+     * 0x20 to 0x3F is a temporary condition the network is still working on,
+     * and 0x40 and up is a permanent failure. Without a PDU only the result
+     * code is left, and a cancelled result means the carrier sent no report,
+     * which is not a failure.
+     */
+    fun classifyDelivery(resultCode: Int, pduStatus: Int?): DeliveryOutcome = when {
+        pduStatus != null -> when {
+            pduStatus < 0x20 -> DeliveryOutcome.Delivered
+            pduStatus < 0x40 -> DeliveryOutcome.Pending
+            else -> DeliveryOutcome.Failed
+        }
+        resultCode == Activity.RESULT_OK -> DeliveryOutcome.Delivered
+        resultCode == Activity.RESULT_CANCELED -> DeliveryOutcome.Pending
+        else -> DeliveryOutcome.Failed
+    }
+
+    fun deliveryFailure(resultCode: Int, pduStatus: Int?): SmsFailure = when {
+        pduStatus != null -> SmsFailure("delivery_failed", "The carrier reported the message was not delivered (status 0x${pduStatus.toString(16)}).")
         else -> SmsFailure("delivery_failed", "The carrier reported the message was not delivered (code $resultCode).")
     }
 }

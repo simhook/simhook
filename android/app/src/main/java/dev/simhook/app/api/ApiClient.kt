@@ -12,9 +12,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/** Raised for any non-2xx response. [code] is the server's stable error code. */
-class ApiException(val status: Int, val code: String, message: String) : IOException(message) {
-    val isAuthFailure: Boolean get() = status == 401
+/**
+ * Raised for any non-2xx response. [code] is the server's stable error
+ * code. Only a 401 the server itself sent means the pairing is gone; one
+ * raised here because no token could be read is not that.
+ */
+class ApiException(val status: Int, val code: String, message: String, val fromServer: Boolean = true) : IOException(message) {
+    val isAuthFailure: Boolean get() = fromServer && status == 401
 }
 
 /**
@@ -51,6 +55,9 @@ class ApiClient(
     suspend fun unpair() {
         execute<Unit>("/v1/device", "DELETE", null, auth = true)
     }
+
+    /** What the server holds for this phone to send. Fetched rows count as handed to the phone. */
+    suspend fun outbox(limit: Int = 100): List<OutboxItem> = get<OutboxPage>("/v1/device/outbox?limit=$limit").data
 
     suspend fun reportStatus(messageId: String, report: StatusReport): Message =
         post<MessageEnvelope>("/v1/device/messages/$messageId/status", AppJson.encodeToString(report)).message
@@ -91,7 +98,7 @@ class ApiClient(
                 .header("User-Agent", userAgent)
                 .header("Accept", "application/json")
             if (auth) {
-                val token = deviceToken() ?: throw ApiException(401, "not_paired", "This phone is not paired.")
+                val token = deviceToken() ?: throw ApiException(401, "not_paired", "This phone is not paired.", fromServer = false)
                 builder.header("Authorization", "Bearer $token")
             }
             http.newCall(builder.build()).execute().use { response ->

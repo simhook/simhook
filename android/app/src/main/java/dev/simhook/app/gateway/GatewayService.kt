@@ -6,22 +6,19 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.simhook.app.SimhookApp
 import dev.simhook.app.core.Notifications
-import dev.simhook.app.outbox.OutboxMessage
-import dev.simhook.app.sms.SendTracker
-import dev.simhook.app.sms.SmsSender
-import dev.simhook.app.work.StatusReportWorker
+import dev.simhook.app.outbox.OutboxDrainer
+import dev.simhook.app.work.OutboxDrainWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The foreground service that does the actual sending. It runs while the
@@ -62,60 +59,36 @@ class GatewayService : Service() {
 
     private suspend fun drain() {
         val container = SimhookApp.get(this).container
-        val dao = container.outbox
-        val now = System.currentTimeMillis()
-
-        // Anything left mid-send by a previous process life is reported as
-        // failed with an honest reason, since we cannot know whether the
-        // radio sent it.
-        for (stuck in dao.interrupted(before = now - 60_000)) {
-            dao.setState(stuck.id, OutboxMessage.STATE_FAILED, now, "Interrupted while sending.")
-            StatusReportWorker.enqueue(this, stuck.id, "failed", now, "interrupted", "The app was interrupted while sending. The message may or may not have gone out.")
-        }
-        dao.prune(before = now - 7L * 24 * 3600 * 1000)
-
-        while (true) {
-            val settings = container.settings.current()
-            val next = if (settings.isPaired && settings.gatewayEnabled) dao.nextPending() else null
-            if (next == null) {
-                if (settings.keepAliveNotification && settings.isPaired) {
-                    showNotification("Gateway active", "Ready to send and receive.")
-                    return // stay alive; the next push starts a new drain
-                }
-                stopSelf()
-                return
-            }
-            val remaining = dao.inFlightCount()
+        OutboxDrainer.drain(this, container, deadlineMillis = null) { remaining ->
             showNotification("Sending messages", if (remaining == 1) "1 message in the queue" else "$remaining messages in the queue")
-
-            val sim = next.simSubscriptionId ?: settings.preferredSimSubscriptionId
-            val t = System.currentTimeMillis()
-            val waiter = SendTracker.expect(next.id)
-            when (val outcome = SmsSender.send(this, next.id, next.to, next.body, sim)) {
-                is SmsSender.Outcome.Failed -> {
-                    SendTracker.forget(next.id)
-                    dao.markSending(next.id, 1, t)
-                    dao.setState(next.id, OutboxMessage.STATE_FAILED, t, outcome.failure.message)
-                    StatusReportWorker.enqueue(this, next.id, "failed", t, outcome.failure.code, outcome.failure.message)
-                }
-                is SmsSender.Outcome.Handed -> {
-                    dao.markSending(next.id, outcome.parts, t)
-                    dao.setState(next.id, OutboxMessage.STATE_HANDED, t, null)
-                    // Wait for the radio's verdict so pacing counts real sends.
-                    withTimeoutOrNull(SENT_TIMEOUT_MS) { waiter.await() }
-                    SendTracker.forget(next.id)
-                }
-            }
-            delay(settings.sendDelaySeconds.coerceIn(0, 3600) * 1000L)
         }
+        val settings = container.settings.current()
+        if (settings.keepAliveNotification && settings.isPaired) {
+            showNotification("Gateway active", "Ready to send and receive.")
+            return // stay alive; the next push starts a new drain
+        }
+        stopSelf()
     }
 
     companion object {
-        private const val SENT_TIMEOUT_MS = 45_000L
+        private const val TAG = "GatewayService"
 
-        /** Start (or nudge) the service. Safe to call from any context that may start foreground services. */
-        fun start(context: Context) {
-            runCatching { ContextCompat.startForegroundService(context, Intent(context, GatewayService::class.java)) }
+        /**
+         * Starts (or nudges) the service. False when the system refused a
+         * foreground start from the background, which newer Android versions
+         * do outside a few windows; the caller then sends another way.
+         */
+        fun start(context: Context): Boolean = try {
+            ContextCompat.startForegroundService(context, Intent(context, GatewayService::class.java))
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "foreground start refused", e)
+            false
+        }
+
+        /** Starts the service, or drains the outbox from a worker when the service cannot start. */
+        fun startOrDrain(context: Context) {
+            if (!start(context)) OutboxDrainWorker.enqueue(context)
         }
 
         fun stop(context: Context) {

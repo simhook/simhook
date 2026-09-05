@@ -1,32 +1,24 @@
 package dev.simhook.app.ui.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -38,6 +30,11 @@ import dev.simhook.app.api.Message
 import dev.simhook.app.ui.parseInstant
 import dev.simhook.app.ui.relativeTime
 import dev.simhook.app.ui.statusLabel
+import dev.simhook.app.ui.statusTone
+import dev.simhook.app.ui.theme.Hairline
+import dev.simhook.app.ui.theme.StatusWord
+import dev.simhook.app.ui.theme.TextLink
+import dev.simhook.app.ui.theme.Tokens
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -103,29 +100,31 @@ fun MessagesScreen(vm: MessagesViewModel, modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
         ) {
+            // Filters are words; the current one is underlined.
             val options = listOf("" to "All", "outbound" to "Sent", "inbound" to "Received")
-            SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
-                options.forEachIndexed { index, (value, label) ->
-                    SegmentedButton(
-                        selected = state.filter == value,
-                        onClick = { vm.setFilter(value) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                    ) { Text(label) }
-                }
+            options.forEach { (value, label) ->
+                val active = state.filter == value
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium.copy(textDecoration = if (active) TextDecoration.Underline else TextDecoration.None),
+                    color = if (active) Tokens.Fg else Tokens.Muted,
+                    modifier = Modifier.clickable { vm.setFilter(value) },
+                )
             }
-            IconButton(onClick = vm::refresh, enabled = !state.loading) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-            }
+            Spacer(Modifier.weight(1f))
+            TextLink("Refresh", onClick = vm::refresh, enabled = !state.loading)
         }
+        Hairline(Modifier.padding(horizontal = 20.dp))
         state.error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodyMedium)
+            Text(it, color = Tokens.Bad, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), style = MaterialTheme.typography.bodyMedium)
         }
         if (state.items.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (state.loading) CircularProgressIndicator() else Text("No messages yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (state.loading) "Loading…" else "No messages yet.", color = Tokens.Muted, style = MaterialTheme.typography.bodyMedium)
             }
             return
         }
@@ -133,11 +132,13 @@ fun MessagesScreen(vm: MessagesViewModel, modifier: Modifier = Modifier) {
             itemsIndexed(state.items, key = { _, m -> m.id }) { index, message ->
                 if (index >= state.items.size - 5) LaunchedEffect(state.items.size) { vm.loadMore() }
                 MessageRow(message)
-                HorizontalDivider()
+                Hairline(Modifier.padding(horizontal = 20.dp))
             }
             if (state.loading) {
                 itemsIndexed(listOf(Unit)) { _, _ ->
-                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        Text("Loading…", color = Tokens.Muted, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -147,34 +148,20 @@ fun MessagesScreen(vm: MessagesViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun MessageRow(m: Message) {
     val outbound = m.direction == "outbound"
-    val failed = m.status == "failed"
     val other = (if (outbound) m.recipient else m.sender) ?: "unknown"
     val at = parseInstant(if (outbound) m.createdAt else (m.receivedAt ?: m.createdAt)) ?: 0L
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top,
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Icon(
-            imageVector = if (outbound) Icons.AutoMirrored.Filled.Send else Icons.Filled.Email,
-            contentDescription = null,
-            tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-        )
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(other, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text(relativeTime(at), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(m.body, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(
-                statusLabel(m.status) + (m.errorMessage?.let { "  ·  $it" } ?: ""),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(if (outbound) "to" else "from", style = MaterialTheme.typography.labelSmall, color = Tokens.Muted)
+            Text(other, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(relativeTime(at), style = MaterialTheme.typography.labelSmall, color = Tokens.Muted)
         }
+        Text(m.body, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        StatusWord(statusTone(m.status), statusLabel(m.status) + (m.errorMessage?.let { ", $it" } ?: ""), muted = true)
     }
 }

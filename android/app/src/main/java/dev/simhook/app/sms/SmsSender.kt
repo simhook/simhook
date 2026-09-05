@@ -11,8 +11,18 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.ConcurrentHashMap
 
-/** Hands one message to the radio. Results arrive later through [SmsStatusReceiver]. */
+/**
+ * Hands one message to the radio, in two steps: first the text is divided
+ * into segments, so the outbox can record how many broadcasts to expect;
+ * then the segments are given to the radio. Results arrive later through
+ * [SmsStatusReceiver].
+ */
 object SmsSender {
+    sealed interface Prepared {
+        class Ready(val manager: SmsManager, val parts: ArrayList<String>) : Prepared
+        class Failed(val failure: SmsFailure) : Prepared
+    }
+
     sealed interface Outcome {
         /** The radio accepted [parts] segments; a sent broadcast follows for each. */
         data class Handed(val parts: Int) : Outcome
@@ -28,14 +38,23 @@ object SmsSender {
     fun hasSendPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
 
-    fun send(context: Context, messageId: String, to: String, body: String, subscriptionId: Int?): Outcome {
+    fun prepare(context: Context, body: String, subscriptionId: Int?): Prepared {
         if (!hasSendPermission(context)) {
-            return Outcome.Failed(SmsFailure("permission_denied", "The app does not have permission to send SMS on this phone."))
+            return Prepared.Failed(SmsFailure("permission_denied", "The app does not have permission to send SMS on this phone."))
         }
         return try {
             val manager = managerFor(context, subscriptionId)
             val parts = manager.divideMessage(body)
-            val count = parts.size
+            if (parts.isEmpty()) Prepared.Failed(SmsFailure("invalid_message", "The message is empty.")) else Prepared.Ready(manager, parts)
+        } catch (e: Exception) {
+            Prepared.Failed(SmsFailure("send_exception", e.message ?: e.javaClass.simpleName))
+        }
+    }
+
+    fun dispatch(context: Context, prepared: Prepared.Ready, messageId: String, to: String): Outcome {
+        val parts = prepared.parts
+        val count = parts.size
+        return try {
             val sentIntents = ArrayList<PendingIntent>(count)
             val deliveredIntents = ArrayList<PendingIntent?>(count)
             for (i in 0 until count) {
@@ -45,9 +64,9 @@ object SmsSender {
                 deliveredIntents += if (i == count - 1) pending(context, ACTION_DELIVERED, messageId, i, count) else null
             }
             if (count == 1) {
-                manager.sendTextMessage(to, null, parts[0], sentIntents[0], deliveredIntents[0])
+                prepared.manager.sendTextMessage(to, null, parts[0], sentIntents[0], deliveredIntents[0])
             } else {
-                manager.sendMultipartTextMessage(to, null, parts, sentIntents, ArrayList(deliveredIntents))
+                prepared.manager.sendMultipartTextMessage(to, null, parts, sentIntents, ArrayList(deliveredIntents))
             }
             Outcome.Handed(count)
         } catch (e: Exception) {

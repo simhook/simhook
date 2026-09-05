@@ -3,31 +3,27 @@ package dev.simhook.app.push
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dev.simhook.app.SimhookApp
-import dev.simhook.app.gateway.GatewayService
-import dev.simhook.app.outbox.OutboxMessage
 import dev.simhook.app.work.HeartbeatScheduler
+import dev.simhook.app.work.OutboxSyncWorker
 import dev.simhook.app.work.PushTokenWorker
 import kotlinx.coroutines.runBlocking
 
 /**
- * The server wakes the phone with data pushes. Two kinds exist: a message to
- * send, and a request to check in.
+ * The server wakes the phone with data pushes that carry no content. Two
+ * kinds exist: "there is something to send", naming the phone, after which
+ * the phone fetches its outbox; and "check in".
  */
 class PushService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         when (data["type"]) {
             "send" -> {
-                val id = data["message_id"] ?: return
-                val batch = data["batch_id"] ?: ""
-                val to = data["to"] ?: return
-                val body = data["body"] ?: return
-                val sim = data["sim_subscription_id"]?.toIntOrNull()
-                val dao = SimhookApp.get(this).container.outbox
-                runBlocking {
-                    dao.insert(OutboxMessage(id = id, batchId = batch, to = to, body = body, simSubscriptionId = sim, createdAt = System.currentTimeMillis()))
-                }
-                GatewayService.start(this)
+                val settings = runBlocking { SimhookApp.get(this@PushService).container.settings.current() }
+                if (!settings.isPaired) return
+                // A push for a pairing this phone no longer holds is not ours to act on.
+                val forDevice = data["device_id"]
+                if (forDevice != null && forDevice != settings.deviceId) return
+                OutboxSyncWorker.enqueue(this)
             }
             "heartbeat" -> HeartbeatScheduler.runNow(this)
         }

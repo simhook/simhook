@@ -21,6 +21,7 @@ object Notifications {
     const val CHANNEL_UPDATES = "updates"
     const val ID_GATEWAY = 1
     const val ID_ALERT_PAIRING = 2
+    const val ID_SYNC = 3
     const val ID_UPDATE_AVAILABLE = 4
     const val ID_UPDATE_READY = 5
 
@@ -82,7 +83,11 @@ object Notifications {
             .setAutoCancel(true)
             .setContentIntent(intent)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(id, n) }
+        try {
+            NotificationManagerCompat.from(context).notify(id, n)
+        } catch (e: SecurityException) {
+            // The permission was taken away between the check and the call.
+        }
     }
 
     private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(

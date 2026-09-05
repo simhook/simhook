@@ -14,11 +14,13 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * A message the server asked this phone to send. Rows survive process death,
- * so a push that arrives while the phone is busy is never lost.
+ * so a message fetched while the phone is busy is never lost.
  *
- * State machine: pending → sending → handed → sent | failed.
- * "handed" means the radio accepted it and we are waiting for the sent
- * broadcast; the receiver moves it on from there.
+ * State machine: pending → handed → sent | failed. "handed" means the row
+ * knows how many parts the radio was given and is waiting for the sent
+ * broadcast of each; the receiver moves it on from there. Every step is
+ * one conditional update, so two broadcasts arriving together cannot
+ * count the same part twice or finish a message twice.
  */
 @Entity(tableName = "outbox")
 data class OutboxMessage(
@@ -49,11 +51,17 @@ interface OutboxDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: OutboxMessage): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(messages: List<OutboxMessage>): List<Long>
+
     @Query("SELECT * FROM outbox WHERE state = 'pending' ORDER BY createdAt ASC LIMIT 1")
     suspend fun nextPending(): OutboxMessage?
 
     @Query("SELECT * FROM outbox WHERE id = :id")
     suspend fun get(id: String): OutboxMessage?
+
+    @Query("SELECT COUNT(*) FROM outbox WHERE state = 'pending'")
+    suspend fun pendingCount(): Int
 
     @Query("SELECT COUNT(*) FROM outbox WHERE state IN ('pending', 'sending', 'handed')")
     suspend fun inFlightCount(): Int
@@ -67,11 +75,21 @@ interface OutboxDao {
     @Query("UPDATE outbox SET state = :state, updatedAt = :now, lastError = :error WHERE id = :id")
     suspend fun setState(id: String, state: String, now: Long, error: String?)
 
-    @Query("UPDATE outbox SET state = 'sending', attempts = attempts + 1, parts = :parts, partsOk = 0, updatedAt = :now WHERE id = :id")
-    suspend fun markSending(id: String, parts: Int, now: Long)
+    /** The radio is about to get [parts] segments; from now on their broadcasts count. */
+    @Query("UPDATE outbox SET state = 'handed', attempts = attempts + 1, parts = :parts, partsOk = 0, updatedAt = :now WHERE id = :id")
+    suspend fun markHanded(id: String, parts: Int, now: Long)
 
-    @Query("UPDATE outbox SET partsOk = partsOk + 1, updatedAt = :now WHERE id = :id")
-    suspend fun partOk(id: String, now: Long)
+    /** One segment went out. Counts only while the message is waiting on the radio. */
+    @Query("UPDATE outbox SET partsOk = partsOk + 1, updatedAt = :now WHERE id = :id AND state = 'handed'")
+    suspend fun partOk(id: String, now: Long): Int
+
+    /** Finishes the message once every segment is out. Exactly one caller sees 1. */
+    @Query("UPDATE outbox SET state = 'sent', updatedAt = :now WHERE id = :id AND state = 'handed' AND partsOk >= parts")
+    suspend fun completeIfAllParts(id: String, now: Long): Int
+
+    /** Ends a message that is still in flight. 0 when it already ended. */
+    @Query("UPDATE outbox SET state = :state, updatedAt = :now, lastError = :error WHERE id = :id AND state IN ('pending', 'sending', 'handed')")
+    suspend fun finish(id: String, state: String, now: Long, error: String?): Int
 
     /** Rows stuck mid-send from a previous process life. */
     @Query("SELECT * FROM outbox WHERE state IN ('sending', 'handed') AND updatedAt < :before")

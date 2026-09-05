@@ -34,7 +34,7 @@ class SimhookApp : Application() {
             val settings = container.settings.current()
             if (settings.isPaired) {
                 HeartbeatScheduler.ensure(this@SimhookApp, settings.heartbeatIntervalMinutes)
-                if (container.outbox.inFlightCount() > 0) GatewayService.start(this@SimhookApp)
+                if (container.outbox.inFlightCount() > 0) GatewayService.startOrDrain(this@SimhookApp)
             }
         }
     }
@@ -58,6 +58,8 @@ class AppContainer(private val context: Context) {
 
     /** Exchanges a pairing code for a device record and token. */
     suspend fun pair(code: String, apiBaseUrl: String, pushToken: String?): Device {
+        // Whatever an earlier pairing left behind is not this account's to send.
+        outbox.clear()
         settings.setApiBaseUrl(apiBaseUrl)
         val current = settings.current()
         val response = api.pair(

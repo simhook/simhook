@@ -1,25 +1,17 @@
 package dev.simhook.app.ui.home
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,10 +24,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.simhook.app.BuildConfig
 import dev.simhook.app.core.AvailableUpdate
 import dev.simhook.app.push.Push
-import dev.simhook.app.sms.SimInfo
 import dev.simhook.app.ui.Permissions
 import dev.simhook.app.ui.formatBytes
 import dev.simhook.app.ui.relativeTime
+import dev.simhook.app.ui.rememberSims
+import dev.simhook.app.ui.theme.FilledButton
+import dev.simhook.app.ui.theme.Hairline
+import dev.simhook.app.ui.theme.ListRow
+import dev.simhook.app.ui.theme.Note
+import dev.simhook.app.ui.theme.PlainSwitch
+import dev.simhook.app.ui.theme.Section
+import dev.simhook.app.ui.theme.Stat
+import dev.simhook.app.ui.theme.StatusWord
+import dev.simhook.app.ui.theme.TextLink
+import dev.simhook.app.ui.theme.Tokens
+import dev.simhook.app.ui.theme.Tone
 
 @Composable
 fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modifier = Modifier) {
@@ -44,7 +47,7 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
     val queued by vm.queued.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val pushAvailable = remember { Push.available(context) }
-    val sims = remember(settings.deviceId) { SimInfo.list(context) }
+    val sims = rememberSims()
     val update = settings.update?.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
 
     // Settings changed from the dashboard should show up as soon as the app is opened,
@@ -58,34 +61,21 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(
-                        Modifier
-                            .size(12.dp)
-                            .background(if (settings.online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape),
-                    )
-                    Text(settings.deviceName.ifBlank { "This phone" }, style = MaterialTheme.typography.titleLarge)
-                }
-                Text(
-                    if (settings.online) "Online" else "Offline as far as the server knows",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text("Last check-in: ${relativeTime(settings.lastHeartbeatAt)}", style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = vm::checkInNow, enabled = !busy) { Text("Check in now") }
-                    TextButton(onClick = vm::refresh, enabled = !busy) { Text("Refresh") }
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(settings.deviceName.ifBlank { "This phone" }, style = MaterialTheme.typography.headlineMedium)
+            StatusWord(if (settings.online) Tone.Ok else Tone.Off, if (settings.online) "Online" else "Offline, as far as the server knows")
+            Text("Last check-in ${relativeTime(settings.lastHeartbeatAt)}", style = MaterialTheme.typography.bodySmall, color = Tokens.Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                TextLink("Check in now", onClick = vm::checkInNow, enabled = !busy)
+                TextLink("Refresh", onClick = vm::refresh, enabled = !busy)
             }
         }
 
         if (update != null) {
-            UpdateCard(
+            UpdateSection(
                 update,
                 downloading = settings.updateDownloadId >= 0,
                 ready = settings.updateReadyUri != null,
@@ -93,163 +83,107 @@ fun DashboardScreen(vm: GatewayViewModel, permissionsOk: Boolean, modifier: Modi
             )
         }
 
-        if (!permissionsOk) {
-            WarningCard(
-                title = "SMS permission missing",
-                text = "The gateway cannot send or receive until SMS permissions are granted.",
-                action = "Open settings",
-                onAction = { Permissions.openAppSettings(context) },
-            )
-        }
-        if (!pushAvailable) {
-            WarningCard(
-                title = "Push not configured in this build",
-                text = "This build has no push configuration, so the server cannot wake the phone. Sends will not arrive.",
-            )
-        } else if (settings.pushToken == null) {
-            WarningCard(
-                title = "Waiting for push registration",
-                text = "The phone has not registered for pushes yet. It usually takes a moment after pairing.",
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            StatCard("Sent", settings.sentCount.toString(), Modifier.weight(1f))
-            StatCard("Received", settings.receivedCount.toString(), Modifier.weight(1f))
-            StatCard("Queued", queued.toString(), Modifier.weight(1f))
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                ToggleRow(
-                    title = "Gateway enabled",
-                    subtitle = "When off, the server holds sends for another device.",
-                    checked = settings.gatewayEnabled,
-                    enabled = !busy,
-                    onChange = vm::setGatewayEnabled,
-                )
-                ToggleRow(
-                    title = "Forward incoming SMS",
-                    subtitle = "Report messages this phone receives to your webhooks.",
-                    checked = settings.receiveEnabled,
-                    enabled = !busy,
-                    onChange = vm::setReceiveEnabled,
-                )
+        if (!permissionsOk || !pushAvailable || settings.pushToken == null) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (!permissionsOk) {
+                    Note(
+                        title = "SMS permission missing",
+                        text = "Nothing can be sent or received until the SMS permissions are granted.",
+                        action = { TextLink("Open settings", onClick = { Permissions.openAppSettings(context) }) },
+                    )
+                }
+                if (!pushAvailable) {
+                    Note(
+                        title = "Push not configured in this build",
+                        text = "The server cannot wake this phone, so sends arrive only at each check-in.",
+                        tone = Tone.Warn,
+                    )
+                } else if (settings.pushToken == null) {
+                    Note(
+                        title = "Waiting for push registration",
+                        text = "The phone has not registered for pushes yet. It usually takes a moment after pairing.",
+                        tone = Tone.Warn,
+                    )
+                }
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("SIM cards", style = MaterialTheme.typography.titleMedium)
-                if (sims.isEmpty()) {
-                    Text(
-                        if (SimInfo.hasPermission(context)) "No active SIM found." else "Grant the phone state permission to list SIMs.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                sims.forEach { sim ->
-                    val name = sim.displayName ?: sim.carrier ?: "SIM ${sim.slot + 1}"
-                    val preferred = settings.preferredSimSubscriptionId == sim.subscriptionId
-                    Text(
-                        "$name  ·  id ${sim.subscriptionId}" + if (preferred) "  ·  preferred" else "",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            Stat(settings.sentCount.toString(), "sent")
+            Stat(settings.receivedCount.toString(), "received")
+            Stat(queued.toString(), "queued")
+        }
+
+        Section("gateway") {
+            ListRow(
+                title = "Sending",
+                subtitle = "When off, this phone sends nothing; sends go to another phone or wait.",
+                trailing = { PlainSwitch(settings.gatewayEnabled, vm::setGatewayEnabled, enabled = !busy) },
+            )
+            ListRow(
+                title = "Forward incoming SMS",
+                subtitle = "Texts this phone receives go to your account and your webhooks.",
+                trailing = { PlainSwitch(settings.receiveEnabled, vm::setReceiveEnabled, enabled = !busy) },
+            )
+        }
+
+        Section("sim cards") {
+            if (sims.isEmpty()) {
                 Text(
-                    "Pass a SIM id as sim_subscription_id in an API call to send from that SIM.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (dev.simhook.app.sms.SimInfo.hasPermission(context)) "No active SIM found." else "Grant the phone state permission to list SIMs.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tokens.Muted,
+                    modifier = Modifier.padding(vertical = 10.dp),
+                )
+                Hairline()
+            }
+            sims.forEach { sim ->
+                val name = sim.displayName ?: sim.carrier ?: "SIM ${sim.slot + 1}"
+                val preferred = settings.preferredSimSubscriptionId == sim.subscriptionId
+                ListRow(
+                    title = name,
+                    subtitle = "id ${sim.subscriptionId}" + if (preferred) ", preferred" else "",
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Pass a SIM id as sim_subscription_id in an API call to send from that SIM.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Tokens.Muted,
+            )
         }
     }
 }
 
 @Composable
-private fun UpdateCard(update: AvailableUpdate, downloading: Boolean, ready: Boolean, onUpdate: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun UpdateSection(update: AvailableUpdate, downloading: Boolean, ready: Boolean, onUpdate: () -> Unit) {
+    Section(if (update.required) "update required" else "update available") {
+        Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                if (update.required) "Update required" else "Update available",
+                "simhook ${update.versionName}" + if (update.sizeBytes > 0) ", ${formatBytes(update.sizeBytes)}" else "",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                "Version ${update.versionName}" + if (update.sizeBytes > 0) "  ·  ${formatBytes(update.sizeBytes)}" else "",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
             )
             if (update.required) {
                 Text(
                     "The server no longer supports this version. Sending and forwarding may stop until you update.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Tokens.Muted,
                 )
             }
-            update.notes?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
+            update.notes?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Tokens.Muted) }
             if (ready && !downloading) {
-                Text(
-                    "Downloaded and verified.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                StatusWord(Tone.Ok, "Downloaded and verified", muted = true)
             }
-            Button(onClick = onUpdate, enabled = !downloading) {
-                Text(
+            Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilledButton(
                     when {
                         downloading -> "Downloading…"
                         ready -> "Install"
                         else -> "Download and install"
                     },
+                    onClick = onUpdate,
+                    enabled = !downloading,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(value, style = MaterialTheme.typography.headlineSmall)
-            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun ToggleRow(title: String, subtitle: String?, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
-    }
-}
-
-@Composable
-fun WarningCard(title: String, text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-            if (action != null && onAction != null) {
-                TextButton(onClick = onAction) { Text(action) }
             }
         }
     }

@@ -10,7 +10,7 @@ data class Device(
     val name: String,
     val enabled: Boolean = true,
     @SerialName("is_default") val isDefault: Boolean = false,
-    @SerialName("receive_enabled") val receiveEnabled: Boolean = false,
+    @SerialName("receive_enabled") val receiveEnabled: Boolean = true,
     @SerialName("send_delay_seconds") val sendDelaySeconds: Int = 5,
     @SerialName("heartbeat_interval_minutes") val heartbeatIntervalMinutes: Int = 20,
     @SerialName("preferred_sim_subscription_id") val preferredSimSubscriptionId: Int? = null,
@@ -91,6 +91,18 @@ data class HeartbeatRequest(
 
 @Serializable
 data class PushTokenRequest(val token: String)
+
+@Serializable
+data class OutboxItem(
+    val id: String,
+    @SerialName("batch_id") val batchId: String? = null,
+    val to: String,
+    val body: String,
+    @SerialName("sim_subscription_id") val simSubscriptionId: Int? = null,
+)
+
+@Serializable
+data class OutboxPage(val data: List<OutboxItem> = emptyList())
 
 @Serializable
 data class StatusReport(

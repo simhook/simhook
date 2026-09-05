@@ -13,14 +13,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.simhook.app.AppContainer
+import dev.simhook.app.core.PairLink
 import dev.simhook.app.ui.home.HomeScreen
 import dev.simhook.app.ui.onboarding.PairScreen
 import dev.simhook.app.ui.onboarding.PermissionsScreen
+import dev.simhook.app.ui.theme.Tokens
 
 /** Routes between pairing, permissions, and the main screens based on state alone. */
 @Composable
@@ -41,7 +44,9 @@ fun AppRoot(container: AppContainer, link: PairLink?, onLinkConsumed: () -> Unit
 
     val current = settings
     when {
-        current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        current == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Tokens.Fg, strokeWidth = 1.5.dp)
+        }
         !current.isPaired -> PairScreen(container = container, link = link, onLinkConsumed = onLinkConsumed)
         !coreGranted && !permissionsSkipped -> PermissionsScreen(onDone = {
             coreGranted = Permissions.coreGranted(context)

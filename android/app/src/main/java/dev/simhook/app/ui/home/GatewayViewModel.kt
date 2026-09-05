@@ -54,7 +54,7 @@ class GatewayViewModel(private val container: AppContainer, private val appConte
     fun setKeepAlive(enabled: Boolean) {
         viewModelScope.launch {
             container.settings.setKeepAlive(enabled)
-            if (enabled) GatewayService.start(appContext) else if (queued.value == 0) GatewayService.stop(appContext)
+            if (enabled) GatewayService.startOrDrain(appContext) else if (queued.value == 0) GatewayService.stop(appContext)
         }
     }
 

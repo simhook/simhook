@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0E7C86</color>
-    <color name="window_background">#FFFBFBFC</color>
+    <!-- Black on white, like the site and the dashboard. Light only. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <color name="window_background">#FFFFFFFF</color>
 </resources>

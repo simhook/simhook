@@ -44,8 +44,8 @@ android {
         // Stays at 36 on purpose: Android 17 withholds one-time-code texts from apps
         // targeting 37 for three hours unless they are the default SMS app. See docs/decisions.md 009.
         targetSdk = 36
-        versionCode = prop("versionCode")?.toInt() ?: 3
-        versionName = prop("versionName") ?: "0.1.1"
+        versionCode = prop("versionCode")?.toInt() ?: 4
+        versionName = prop("versionName") ?: "0.1.2"
         vectorDrawables.useSupportLibrary = true
 
         // Where the app looks for newer builds. See docs/decisions.md 012.
@@ -92,6 +92,16 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        // Plain JVM tests of the pure parts; android.jar methods answer with defaults.
+        unitTests.isReturnDefaultValues = true
+    }
+
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = false
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -135,4 +145,6 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     implementation(libs.play.services.code.scanner)
+
+    testImplementation(libs.junit)
 }

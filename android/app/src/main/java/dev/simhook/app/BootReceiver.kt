@@ -35,7 +35,7 @@ class BootReceiver : BroadcastReceiver() {
                 HeartbeatScheduler.ensure(app, settings.heartbeatIntervalMinutes)
                 HeartbeatScheduler.runNow(app)
                 if (settings.keepAliveNotification || container.outbox.inFlightCount() > 0) {
-                    GatewayService.start(app)
+                    GatewayService.startOrDrain(app)
                 }
             } finally {
                 pending.finish()
