@@ -108,7 +108,7 @@ if (!args.publish) {
   log("dry run: pass --publish to create the GitHub release");
   process.exit(0);
 }
-const exists = spawnSync("gh", ["release", "view", tag, "-R", repo], { stdio: "ignore", shell: win }).status === 0;
+const exists = spawn("gh", ["release", "view", tag, "-R", repo], { stdio: "ignore", shell: win }).status === 0;
 if (exists && !args.force) fail(`release ${tag} already exists in ${repo}; pass --force to replace it`);
 if (exists) {
   log(`deleting the existing ${tag} release`);
@@ -178,14 +178,21 @@ function quoteIfShell(cmdArgs, opts) {
   return opts.shell ? cmdArgs.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)) : cmdArgs;
 }
 
+function spawn(cmd, cmdArgs, opts) {
+  // With a shell, hand over one command line we quoted ourselves; Node would otherwise concatenate the arguments unquoted.
+  return opts.shell
+    ? spawnSync([quoteIfShell([cmd], opts)[0], ...quoteIfShell(cmdArgs, opts)].join(" "), opts)
+    : spawnSync(cmd, cmdArgs, opts);
+}
+
 function run(cmd, cmdArgs, opts = {}) {
-  const r = spawnSync(cmd, quoteIfShell(cmdArgs, opts), { stdio: "inherit", ...opts });
+  const r = spawn(cmd, cmdArgs, { stdio: "inherit", ...opts });
   if (r.error) fail(`${cmd}: ${r.error.message}`);
   if (r.status !== 0) fail(`${cmd} exited with ${r.status}`);
 }
 
 function capture(cmd, cmdArgs, opts = {}) {
-  const r = spawnSync(cmd, quoteIfShell(cmdArgs, opts), { encoding: "utf8", ...opts });
+  const r = spawn(cmd, cmdArgs, { encoding: "utf8", ...opts });
   if (r.error) fail(`${cmd}: ${r.error.message}`);
   if (r.status !== 0) fail(`${cmd} exited with ${r.status}\n${r.stdout}\n${r.stderr}`);
   return r.stdout + r.stderr;
