@@ -1,0 +1,62 @@
+---
+import "@fontsource-variable/instrument-sans";
+import "@fontsource-variable/geist-mono";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  wide?: boolean;
+}
+
+const {
+  title,
+  description = "Turn an Android phone into an SMS API. Send and receive texts from your code through your own SIM, with webhooks, an SDK, and an MCP server.",
+  wide = false,
+} = Astro.props;
+
+const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
+const nav = [
+  ["/docs", "Docs"],
+  ["/pricing", "Pricing"],
+  ["/download", "Download"],
+  ["https://github.com/simhook/simhook", "GitHub"],
+];
+const current = (href: string) => (href.startsWith("/") && (path === href || path.startsWith(href + "/")) ? "page" : undefined);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={new URL(path === "/" ? "/" : path, Astro.site)} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#ffffff" />
+  </head>
+  <body>
+    <div class:list={["page", { wide }]}>
+      <nav class="top" aria-label="Main">
+        <a class="wm" href="/">simhook</a>
+        {nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
+        <span class="right"><a href="https://app.simhook.dev/login">Sign in</a></span>
+      </nav>
+      <main>
+        <slot />
+      </main>
+      <footer class="bottom">
+        <span>Open source, AGPL-3.0</span>
+        <a href="https://github.com/simhook/simhook">GitHub</a>
+        <a href="/docs">Docs</a>
+        <a href="https://github.com/simhook/simhook/blob/main/SECURITY.md">Security</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+      </footer>
+    </div>
+  </body>
+</html>

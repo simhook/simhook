@@ -1,0 +1,35 @@
+---
+import Base from "./Base.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+  frontmatter?: { title: string; description?: string };
+}
+
+const { frontmatter } = Astro.props;
+const title = frontmatter?.title ?? Astro.props.title ?? "Docs";
+const description = frontmatter?.description ?? Astro.props.description;
+const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "");
+
+const pages = [
+  ["/docs", "Quickstart"],
+  ["/docs/sending", "Sending"],
+  ["/docs/receiving", "Receiving"],
+  ["/docs/webhooks", "Webhooks"],
+  ["/docs/sdk", "SDK"],
+  ["/docs/mcp", "MCP"],
+  ["/docs/self-hosting", "Self-hosting"],
+  ["/docs/api", "API reference"],
+];
+---
+
+<Base title={`${title} · simhook docs`} description={description} wide>
+  <nav class="docs-nav" aria-label="Documentation">
+    {pages.map(([href, label]) => <a href={href} aria-current={path === href ? "page" : undefined}>{label}</a>)}
+  </nav>
+  <article class="doc">
+    <h1>{title}</h1>
+    <slot />
+  </article>
+</Base>

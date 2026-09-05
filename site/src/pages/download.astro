@@ -1,0 +1,64 @@
+---
+import Base from "../layouts/Base.astro";
+
+// The current release, read from the manifest the app itself polls. Built
+// into the page, so a build with no network still produces a working page.
+const MANIFEST = "https://github.com/simhook/simhook/releases/latest/download/android.json";
+type Manifest = { version_name: string; version_code: number; sha256: string; size_bytes: number; released_at?: string; notes?: string | null };
+let m: Manifest | null = null;
+try {
+  const r = await fetch(MANIFEST, { redirect: "follow" });
+  if (r.ok) m = (await r.json()) as Manifest;
+} catch {
+  m = null;
+}
+const size = m ? `${(m.size_bytes / 1048576).toFixed(1)} MB` : null;
+const date = m?.released_at ? new Date(m.released_at).toISOString().slice(0, 10) : null;
+---
+
+<Base title="Download simhook for Android" description="The simhook Android app: a signed APK that pairs a phone with your account, sends what your API asks for, forwards incoming texts, and updates itself.">
+  <h1>Download simhook for Android</h1>
+  <p class="lead">One APK, signed with the simhook release key. It installs directly, updates itself, and works on any phone running Android 8.0 or newer with a SIM in it.</p>
+  <div class="links">
+    <a class="btn" href="/download/simhook.apk">Download simhook.apk</a>
+    {m ? <span class="meta">version {m.version_name}, {size}, {date}</span> : <span class="meta">latest release</span>}
+  </div>
+  {m?.notes ? <p class="cap">{m.notes}</p> : null}
+
+  <section>
+    <h2>Install</h2>
+    <ol>
+      <li>Open the file on the phone. Android asks once to allow installs from your browser or file manager; allow it. Play Protect may offer to scan the app first; that is fine.</li>
+      <li>Open simhook and grant the SMS permission. Phone state is optional and only lists your SIMs; notifications show sending progress and alerts.</li>
+      <li>In the dashboard, go to Phones and pair: scan the QR code, type the code, or open the link on the phone. Codes last ten minutes.</li>
+      <li>Leave the phone on Wi-Fi or mobile data with the SIM in it. Turn off battery optimisation for simhook if your phone is aggressive about background apps; the app offers the setting.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Updates</h2>
+    <p>The app checks for a newer release twice a day and when you open it, then downloads the file, verifies its checksum, and hands it to Android's installer, which only accepts a file signed with the same key. Nothing installs without your tap.</p>
+  </section>
+
+  <section>
+    <h2>Verify the download</h2>
+    {m ? (
+      <pre><code>sha256sum simhook.apk
+<span class="c"># {m.sha256}</span></code></pre>
+    ) : (
+      <pre><code>sha256sum simhook.apk
+<span class="c"># compare with the SHA256SUMS file on the releases page</span></code></pre>
+    )}
+    <p class="cap">Every release, its checksums, and its manifest are on the <a href="https://github.com/simhook/simhook/releases">releases page</a>. Older versions stay there.</p>
+  </section>
+
+  <section>
+    <h2>Why not Google Play</h2>
+    <p>Google Play does not allow apps that send SMS on your behalf unless they are your default messaging app. simhook is not a messaging app, so it ships as a direct download instead. The signing key never changes, so updates always install over the version you have.</p>
+  </section>
+
+  <section>
+    <h2>Self-hosting</h2>
+    <p>The same app works with your own server: the pairing link carries the API address, so nothing needs to be rebuilt. To have the app fetch updates from your host instead of this site, build it with your manifest address. <a href="/docs/self-hosting">Details</a></p>
+  </section>
+</Base>

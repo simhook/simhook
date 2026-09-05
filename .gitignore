@@ -38,3 +38,6 @@ creds*.txt
 
 # Release signing (lives outside the repo; see android/RELEASING.md)
 keystore.properties
+
+# Local editor/agent config
+.claude/

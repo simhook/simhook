@@ -7,6 +7,7 @@ Turn an Android phone into an SMS API. Send and receive text messages from your 
 ```
 api/         Go service: HTTP API, job workers, scheduled tasks, migrations
 web/         Next.js dashboard
+site/        simhook.dev: landing page, docs, download page (Astro, static)
 android/     Kotlin + Jetpack Compose phone app
 packages/
   contracts/ OpenAPI spec generated from the API, plus generated TypeScript types

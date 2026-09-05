@@ -1,0 +1,227 @@
+---
+import Doc from "../../layouts/Doc.astro";
+import spec from "@simhook/contracts/openapi.json";
+
+// The reference is generated at build time from the API's own OpenAPI
+// document, so it cannot drift from what the server accepts.
+type Any = Record<string, any>;
+const doc = spec as Any;
+const schemas: Record<string, Any> = doc.components?.schemas ?? {};
+const refName = (ref: string) => ref.split("/").pop() as string;
+const resolve = (s: Any | undefined): Any | undefined => (s?.$ref ? schemas[refName(s.$ref)] : s);
+
+function typeOf(s: Any | undefined): string {
+  if (!s) return "";
+  if (s.$ref) return refName(s.$ref);
+  const types: string[] = Array.isArray(s.type) ? s.type : s.type ? [s.type] : [];
+  const nullable = types.includes("null");
+  const union = s.oneOf ?? s.anyOf;
+  let t = types.filter((x) => x !== "null")[0] ?? (union ? union.map(typeOf).join(" | ") : s.properties ? "object" : "any");
+  if (t === "array") t = `${typeOf(s.items)}[]`;
+  else if (s.format === "date-time") t = "timestamp";
+  if (s.enum) t = s.enum.map((v: unknown) => JSON.stringify(v)).join(" | ");
+  return nullable ? `${t} | null` : t;
+}
+
+type Field = { name: string; type: string; required: boolean; description: string; ref?: string };
+function fields(s: Any | undefined): Field[] {
+  const r = resolve(s);
+  if (!r?.properties) return [];
+  const req = new Set<string>(r.required ?? []);
+  return Object.entries(r.properties as Record<string, Any>).map(([name, p]) => ({
+    name,
+    type: typeOf(p),
+    required: req.has(name),
+    description: p.description ?? "",
+    ref: p.$ref ? refName(p.$ref) : p.items?.$ref ? refName(p.items.$ref) : undefined,
+  }));
+}
+
+const tagOrder = ["messages", "devices", "webhooks", "api-keys", "billing", "auth", "device"];
+const tagTitle: Record<string, string> = {
+  messages: "Messages",
+  devices: "Phones",
+  webhooks: "Webhooks",
+  "api-keys": "API keys",
+  billing: "Plans",
+  auth: "Accounts and sessions",
+  device: "Phone endpoints",
+};
+const tagIntro: Record<string, string> = {
+  messages: "Send texts, follow sends, and read what was sent and received.",
+  devices: "The phones paired with the account: list them, change their settings, pair new ones.",
+  webhooks: "Endpoints that receive events, and the log of every delivery attempt.",
+  "api-keys": "Keys for the API. Each has scopes; the secret is shown once, at creation.",
+  billing: "The plans and their limits.",
+  auth: "Used by the dashboard with a session cookie. Listed for self-hosters building their own front end.",
+  device: "Called by the phone app with the token it received at pairing. Listed for anyone writing their own client.",
+};
+
+type Op = Any & { path: string; method: string };
+const ops: Op[] = [];
+for (const [path, item] of Object.entries(doc.paths as Record<string, Any>)) {
+  for (const [method, op] of Object.entries(item)) ops.push({ ...(op as Any), path, method: method.toUpperCase() });
+}
+const groups = tagOrder
+  .map((tag) => ({
+    tag,
+    ops: ops
+      .filter((o) => (o.tags ?? []).includes(tag))
+      .sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method)),
+  }))
+  .filter((g) => g.ops.length > 0);
+
+const anchor = (o: Op) => `${o.method.toLowerCase()}-${o.path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`;
+const params = (o: Op) => (o.parameters ?? []) as Any[];
+const bodySchema = (o: Op) => o.requestBody?.content?.["application/json"]?.schema;
+const okCode = (o: Op) => Object.keys(o.responses ?? {}).find((c) => c.startsWith("2"));
+const okSchema = (o: Op) => {
+  const c = okCode(o);
+  return c ? o.responses[c]?.content?.["application/json"]?.schema : undefined;
+};
+const errorFields = fields({ $ref: "#/components/schemas/APIError" });
+const schemaNames = Object.keys(schemas).filter((n) => n !== "APIError").sort();
+---
+
+<Doc title="API reference" description="Every endpoint of the simhook API, generated from its OpenAPI document.">
+  <p class="lead">Generated from the API's OpenAPI document, version {doc.info?.version}. The <a href="https://github.com/simhook/simhook/blob/main/packages/contracts/openapi.json">document itself</a> is in the repository, and the <a href="/docs/sdk">SDK</a> is typed from it.</p>
+
+  <h2>Basics</h2>
+  <p>The base URL is <code>https://api.simhook.dev</code> (or your own host). Requests and responses are JSON; timestamps are RFC 3339 in UTC; ids are UUIDs.</p>
+  <p>Authenticate with an API key from the dashboard in the <code>X-Api-Key</code> header. <code>Authorization: Bearer &lt;key&gt;</code> is accepted too. Keys carry scopes (<code>send</code>, <code>read</code>, <code>devices</code>, <code>webhooks</code>) and an endpoint refuses a key without the scope it needs.</p>
+  <p>Lists return <code>data</code> and a <code>next_cursor</code>; pass it back as <code>cursor</code> for the next page. <code>limit</code> defaults to 50.</p>
+
+  <h3>Errors</h3>
+  <p>Every error has the same shape. <code>code</code> is stable and meant for your code; <code>message</code> is for people.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th></th></tr></thead>
+      <tbody>
+        {errorFields.map((f) => (
+          <tr><td class="mono">{f.name}</td><td class="mono">{f.type}</td><td>{f.description}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p>Common codes: <code>unauthenticated</code> (401), <code>insufficient_scope</code> (403, a key without the scope the endpoint needs), <code>not_found</code> (404), <code>validation_failed</code> (422, with per-field <code>errors</code>), <code>no_device</code> (no paired phone can take the send), and the plan limits <code>plan_limit_daily</code>, <code>plan_limit_monthly</code>, <code>plan_limit_batch</code>, <code>plan_limit_devices</code>, <code>plan_limit_webhooks</code> (429).</p>
+
+  <h2>Endpoints</h2>
+  {groups.map((g) => (
+    <ul class="idx">
+      {g.ops.map((o) => (
+        <li><a href={`#${anchor(o)}`}><code>{o.method} {o.path}</code></a></li>
+      ))}
+    </ul>
+  ))}
+
+  {groups.map((g) => (
+    <section id={g.tag}>
+      <h2>{tagTitle[g.tag]}</h2>
+      <p class="tagintro">{tagIntro[g.tag]}</p>
+      {g.ops.map((o) => {
+        const ps = params(o);
+        const body = fields(bodySchema(o));
+        const code = okCode(o);
+        const resp = fields(okSchema(o));
+        return (
+          <div class="op" id={anchor(o)}>
+            <p class="sig"><b>{o.method}</b>{o.path}</p>
+            <h3>{o.summary ?? o.operationId}</h3>
+            {o.description ? <p>{o.description}</p> : null}
+            {ps.length > 0 ? (
+              <>
+                <h4>parameters</h4>
+                <div class="tbl">
+                  <table>
+                    <tbody>
+                      {ps.map((p) => (
+                        <tr>
+                          <td class="mono nowrap">{p.name}</td>
+                          <td class="mono nowrap">{p.in}{p.required ? ", required" : ""}</td>
+                          <td class="mono nowrap">{typeOf(p.schema)}</td>
+                          <td>{p.description ?? ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : null}
+            {body.length > 0 ? (
+              <>
+                <h4>request body</h4>
+                <div class="tbl">
+                  <table>
+                    <tbody>
+                      {body.map((f) => (
+                        <tr>
+                          <td class="mono nowrap">{f.name}</td>
+                          <td class="mono nowrap">{f.ref ? <a href={`#schema-${f.ref}`}>{f.type}</a> : f.type}{f.required ? ", required" : ""}</td>
+                          <td>{f.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : null}
+            {code ? (
+              <>
+                <h4>response {code}</h4>
+                {resp.length > 0 ? (
+                  <div class="tbl">
+                    <table>
+                      <tbody>
+                        {resp.map((f) => (
+                          <tr>
+                            <td class="mono nowrap">{f.name}</td>
+                            <td class="mono nowrap">{f.ref ? <a href={`#schema-${f.ref}`}>{f.type}</a> : f.type}</td>
+                            <td>{f.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p class="muted">No body.</p>
+                )}
+              </>
+            ) : null}
+          </div>
+        );
+      })}
+    </section>
+  ))}
+
+  <section id="objects">
+    <h2>Objects</h2>
+    <p class="tagintro">The shapes that appear in requests and responses above.</p>
+    {schemaNames.map((name) => {
+      const s = schemas[name];
+      const fs = fields(s);
+      return (
+        <div class="op" id={`schema-${name}`}>
+          <h3>{name}</h3>
+          {s.description ? <p>{s.description}</p> : null}
+          {fs.length > 0 ? (
+            <div class="tbl">
+              <table>
+                <tbody>
+                  {fs.map((f) => (
+                    <tr>
+                      <td class="mono nowrap">{f.name}</td>
+                      <td class="mono nowrap">{f.ref ? <a href={`#schema-${f.ref}`}>{f.type}</a> : f.type}{f.required ? ", required" : ""}</td>
+                      <td>{f.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p class="muted">{typeOf(s)}</p>
+          )}
+        </div>
+      );
+    })}
+  </section>
+</Doc>

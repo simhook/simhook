@@ -1,0 +1,41 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="simhook pricing" description="Free for 30 messages a day. Pro and Scale for more messages and more phones. Self-hosting is free without limits.">
+  <h1>Pricing</h1>
+  <p class="lead">Messages are counted, not billed. The carrier plan on your SIM is what actually sends them, so what you pay simhook for is the routing, the receipts, the webhooks, and the dashboard.</p>
+
+  <section>
+    <table>
+      <thead><tr><th>Plan</th><th>Messages</th><th>Phones</th><th>Per send</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr><td>Free</td><td>30 a day, 500 a month</td><td>1</td><td>25 recipients</td><td class="nowrap">$0</td></tr>
+        <tr><td>Pro</td><td>10,000 a month</td><td>3</td><td>500 recipients</td><td class="nowrap">$12 / month, or $120 / year</td></tr>
+        <tr><td>Scale</td><td>50,000 a month</td><td>10</td><td>2,500 recipients</td><td class="nowrap">$39 / month, or $390 / year</td></tr>
+      </tbody>
+    </table>
+    <p class="cap">Paid plans open soon. Every account is on Free until then, and nothing you build changes when you upgrade.</p>
+  </section>
+
+  <section>
+    <h2>What counts</h2>
+    <ul class="plain">
+      <li><b>One message</b><span>One recipient. A send to twenty numbers is twenty messages.</span></li>
+      <li><b>Long texts</b><span>A text the phone splits into several SMS still counts once.</span></li>
+      <li><b>Received texts</b><span>Free and uncounted on every plan.</span></li>
+      <li><b>Failed sends</b><span>Count, because the phone tried. Scheduled sends count when they go out.</span></li>
+      <li><b>Days and months</b><span>Calendar days and months in UTC.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Every plan has</h2>
+    <p>The full API, signed webhooks with retries, delivery receipts, dual-SIM support, scheduling, the dashboard, the TypeScript SDK, the MCP server, and the app with its updates. Limits are the only difference.</p>
+  </section>
+
+  <section>
+    <h2>Self-hosting</h2>
+    <p>The whole stack is open source under the AGPL-3.0, and running it yourself is free with no limits of any kind. <a href="/docs/self-hosting">How to self-host</a></p>
+  </section>
+</Base>

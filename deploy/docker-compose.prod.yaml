@@ -56,6 +56,14 @@ services:
     depends_on:
       - api
 
+  # The site on the bare domain: static files served by a small Caddy.
+  site:
+    image: ${SITE_IMAGE:-ghcr.io/simhook/site:latest}
+    build:
+      context: ..
+      dockerfile: site/Dockerfile
+    restart: unless-stopped
+
   caddy:
     build: ./caddy
     image: simhook/caddy:local
@@ -78,6 +86,7 @@ services:
     depends_on:
       - api
       - web
+      - site
 
   # Dumps the database once a day into ./backups and prunes old dumps.
   # Copy that directory off the host; a backup on the same disk is not a backup.

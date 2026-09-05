@@ -1,0 +1,89 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="simhook: your phone is the SMS API">
+  <h1>simhook turns an Android phone into an SMS API.</h1>
+  <p class="lead">Pair a phone with a SIM in it. Every message you send from code goes out through that SIM, and every text the phone receives comes back to you as a webhook. Your numbers, your carrier plan, no per-message fees.</p>
+  <p>It is a Go API you can self-host, an Android app that stays out of the way, a dashboard, a TypeScript SDK, and an MCP server so an agent can text people too.</p>
+  <div class="links">
+    <a class="btn" href="https://app.simhook.dev/register">Start free</a>
+    <a href="/download">Download the app</a>
+    <span class="meta">Android 8.0+, 2.2 MB, updates itself</span>
+  </div>
+
+  <section>
+    <h2>Send one</h2>
+    <pre><code><span class="c"># any HTTP client, or the SDK, or an agent over MCP</span>
+curl https://api.simhook.dev/v1/messages \
+  -H "X-Api-Key: sh_live_..." \
+  -H "Content-Type: application/json" \
+  -d '&#123;"to": ["+15550001111"], "body": "Your code is 482913"&#125;'</code></pre>
+    <pre><code><span class="c"># about two seconds later, at your server</span>
+POST /sms-events
+X-Simhook-Event: message.delivered
+X-Simhook-Signature: t=1788618234,v1=9f3c1a...
+&#123;"id": "...", "event": "message.delivered", "data": &#123;"recipient": "+15550001111", "status": "delivered", "delivered_at": "2026-09-05T13:53:30Z", ...&#125;&#125;</code></pre>
+    <p class="cap">Every state change is a signed webhook: sent, delivered, failed. Incoming texts arrive the same way, with the sender and the SIM that received them. <a href="/docs">Quickstart</a></p>
+  </section>
+
+  <section>
+    <h2>What you get</h2>
+    <ul class="plain">
+      <li><b>Send and receive</b><span>Through your own SIM. Dual SIM works; pick one per message.</span></li>
+      <li><b>Delivery receipts</b><span>Sent and delivered from the carrier, not guessed.</span></li>
+      <li><b>Webhooks</b><span>HMAC-signed, retried for a day, paused when your endpoint keeps failing.</span></li>
+      <li><b>Sends and scheduling</b><span>Up to 5,000 recipients in one call, a send time if you want one.</span></li>
+      <li><b>SDK and MCP server</b><span>Typed client for Node, edge, and browsers. Eight tools for agents.</span></li>
+      <li><b>Self-hosting</b><span>One VPS, one compose file. AGPL-3.0.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What it looks like</h2>
+    <div class="shots">
+      <div class="shot">
+        <div class="mini">
+          <div class="stats"><div><b class="num">1,284</b><span>sent today</span></div><div><b class="num">98.6%</b><span>delivered</span></div><div><b class="num">312</b><span>received</span></div><div><b class="num">3</b><span>queued</span></div></div>
+          <div class="row"><span><span class="dot"></span>Pixel 8</span><span class="meta">Turkcell, SIM 1, checked in 40 s ago</span></div>
+          <div class="row"><span><span class="dot off"></span>Galaxy A54</span><span class="meta">offline 3 h</span></div>
+          <div class="row"><span>+1 555 000 1111</span><span class="meta">delivered, 12:04:21</span></div>
+          <div class="row"><span>+90 532 000 0000</span><span class="meta">received, 12:03:58</span></div>
+          <div class="row"><span>+44 7700 900123</span><span class="meta">sent, 12:03:40</span></div>
+        </div>
+        <div class="shotcap">app.simhook.dev</div>
+      </div>
+      <div class="shot phone-shot">
+        <img src="/img/app-home.webp" width="640" height="1422" alt="The simhook Android app: phone online, gateway enabled, forwarding on, one SIM listed" loading="lazy" />
+        <div class="shotcap">the app on a Pixel 8</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pricing</h2>
+    <table>
+      <thead><tr><th>Plan</th><th>Includes</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr><td>Free</td><td>30 messages a day, 500 a month, one phone, the whole API</td><td class="nowrap">$0</td></tr>
+        <tr><td>Pro</td><td>10,000 messages a month, three phones, 500 recipients per send</td><td class="nowrap">$12 / month</td></tr>
+        <tr><td>Scale</td><td>50,000 messages a month, ten phones, 2,500 recipients per send</td><td class="nowrap">$39 / month</td></tr>
+      </tbody>
+    </table>
+    <p class="cap">Messages are counted, not billed: the carrier plan on your SIM is what actually sends them. Self-hosting is free and has no limits. <a href="/pricing">Details</a></p>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+    <dl class="qa">
+      <dt>Will my carrier mind?</dt>
+      <dd>Consumer plans are for people, not bulk. The app paces sends with a delay you set, and the dashboard shows what went out. Keep it to what your plan allows and to people who want your messages; for real volume use a business SIM.</dd>
+      <dt>Does it forward one-time codes?</dt>
+      <dd>Yes. The app targets Android 16 on purpose, because Android 17 withholds code-like texts from newer apps for three hours unless they are the default SMS app.</dd>
+      <dt>Can I run it myself?</dt>
+      <dd>Yes. The whole stack runs from one compose file on a small VPS, and the app can be pointed at your server when you pair it. <a href="/docs/self-hosting">Self-hosting</a></dd>
+      <dt>Where does the app come from?</dt>
+      <dd>From <a href="/download">this site</a>, signed and published on GitHub. Google Play does not allow apps that send SMS on your behalf unless they are your default messaging app, so simhook is installed directly and updates itself.</dd>
+    </dl>
+  </section>
+</Base>
