@@ -28,7 +28,7 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
 
    ```sh
    cp .env.example .env          # domains, Cloudflare token, database password
-   cp api.env.example api.env    # secret key, SMTP, admin email
+   cp api.env.example api.env    # secret key, SMTP
    mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
    chown 10001:10001 secrets/fcm.json && chmod 400 secrets/fcm.json   # the API runs as uid 10001
    openssl rand -base64 32       # value for SIMHOOK_SECRET_KEY
@@ -95,7 +95,8 @@ docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhoo
 
 ## Notes
 
-- `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets and signs sessions. Losing it means every webhook needs a new secret and everyone signs in again. Keep a copy off the host.
+- `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets. Losing it means every webhook needs a new secret. Keep a copy off the host.
+- `ROOT_DOMAIN` is also the cookie domain: the API sets a readable signed-in flag cookie on it so the site and the dashboard know who is signed in before asking. `API_DOMAIN` and `APP_DOMAIN` must be under it, and the API refuses to start otherwise.
 - The dashboard bakes the API origin into its build. Changing `API_DOMAIN` means rebuilding the `web` image.
 - The API trusts forwarded client addresses only because compose sets `SIMHOOK_TRUST_PROXY=true`. Do not set that on an instance exposed without a proxy.
 - Logs: `docker compose -f docker-compose.prod.yaml logs -f api web caddy`.

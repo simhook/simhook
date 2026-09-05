@@ -32,7 +32,7 @@ type loginInput struct {
 }
 
 type sessionOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
 	Body      struct {
 		User store.User `json:"user"`
 	}
@@ -41,7 +41,27 @@ type sessionOutput struct {
 type emptyOutput struct{}
 
 type clearCookieOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
+}
+
+type sessionView struct {
+	ID         uuid.UUID `json:"id"`
+	UserAgent  *string   `json:"user_agent" doc:"The browser that signed in, as it described itself."`
+	IP         *string   `json:"ip" doc:"The address it signed in from."`
+	CreatedAt  time.Time `json:"created_at" doc:"When it signed in."`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	ExpiresAt  time.Time `json:"expires_at" doc:"When it ends if it stays idle."`
+	Current    bool      `json:"current" doc:"True for the session making this request."`
+}
+
+type listSessionsOutput struct {
+	Body struct {
+		Data []sessionView `json:"data"`
+	}
+}
+
+type sessionIDInput struct {
+	ID string `path:"id" doc:"Session id."`
 }
 
 type meOutput struct {
@@ -138,20 +158,13 @@ type renameKeyInput struct {
 // Handlers
 // ---------------------------------------------------------------------------
 
-func (s *Server) sessionCookie(token string, expires time.Time) http.Cookie {
-	return http.Cookie{
-		Name: sessionCookie, Value: token, Path: "/", Expires: expires,
-		HttpOnly: true, Secure: s.deps.Config.IsProduction(), SameSite: http.SameSiteLaxMode,
-	}
-}
-
 func (s *Server) registerAuth() {
 	tags := []string{"auth"}
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "register", Method: http.MethodPost, Path: "/v1/auth/register",
 		Summary: "Create an account", Tags: tags, DefaultStatus: http.StatusCreated,
-		Description: "Creates the account, signs it in with a session cookie, and emails a verification code. Sending is blocked until the email is verified.",
+		Description: "Creates the account, signs it in with the session cookies, and emails a verification code. Sending is blocked until the email is verified.",
 	}, func(ctx context.Context, in *registerInput) (*sessionOutput, error) {
 		u, err := s.deps.Auth.Register(ctx, in.Body.Email, in.Body.Password, in.Body.Name)
 		if err != nil {
@@ -163,7 +176,7 @@ func (s *Server) registerAuth() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "login", Method: http.MethodPost, Path: "/v1/auth/login",
 		Summary: "Sign in", Tags: tags,
-		Description: "Checks the password and sets the session cookie used by the dashboard.",
+		Description: "Checks the password and sets the session cookies the dashboard uses. A session lives 30 days without use, longer while it is used, and 180 days at most.",
 	}, func(ctx context.Context, in *loginInput) (*sessionOutput, error) {
 		u, err := s.deps.Auth.Login(ctx, in.Body.Email, in.Body.Password)
 		if err != nil {
@@ -176,11 +189,77 @@ func (s *Server) registerAuth() {
 		OperationID: "logout", Method: http.MethodPost, Path: "/v1/auth/logout",
 		Extensions: scoped(scopeSession),
 		Summary:    "Sign out", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Description: "Ends this session and clears the cookies. Always succeeds, so a browser with a dead cookie can still clean up.",
 	}, func(ctx context.Context, _ *struct{}) (*clearCookieOutput, error) {
 		if tok, ok := ctx.Value(sessionTokenKey{}).(string); ok && tok != "" {
 			_ = s.deps.Auth.Logout(ctx, tok)
 		}
-		return &clearCookieOutput{SetCookie: http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode}}, nil
+		return &clearCookieOutput{SetCookie: s.clearCookies()}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "list-sessions", Method: http.MethodGet, Path: "/v1/auth/sessions",
+		Extensions: scoped(scopeSession),
+		Summary:    "List sessions", Tags: tags, Security: securityUser,
+		Description: "Every browser signed in to this account, most recently used first. The one making the request is marked current.",
+	}, func(ctx context.Context, _ *struct{}) (*listSessionsOutput, error) {
+		p, err := requireSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sessions, err := s.deps.Auth.ListSessions(ctx, p.User.ID)
+		if err != nil {
+			return nil, mapErr(ctx, s.deps.Log, err)
+		}
+		out := &listSessionsOutput{}
+		out.Body.Data = make([]sessionView, 0, len(sessions))
+		for _, sess := range sessions {
+			out.Body.Data = append(out.Body.Data, sessionView{
+				ID: sess.ID, UserAgent: sess.UserAgent, IP: sess.IP, CreatedAt: sess.CreatedAt,
+				LastSeenAt: sess.LastSeenAt, ExpiresAt: sess.ExpiresAt, Current: sess.ID == p.Session.ID,
+			})
+		}
+		return out, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "revoke-session", Method: http.MethodDelete, Path: "/v1/auth/sessions/{id}",
+		Extensions: scoped(scopeSession),
+		Summary:    "End a session", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Description: "Signs that browser out. Ending the current session also clears its cookies.",
+	}, func(ctx context.Context, in *sessionIDInput) (*clearCookieOutput, error) {
+		p, err := requireSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		id, ok := ids.Parse(in.ID)
+		if !ok {
+			return nil, apiErr(http.StatusNotFound, "not_found", "No such session.")
+		}
+		if err := s.deps.Auth.RevokeSession(ctx, p.User.ID, id); err != nil {
+			return nil, mapErr(ctx, s.deps.Log, err)
+		}
+		out := &clearCookieOutput{}
+		if id == p.Session.ID {
+			out.SetCookie = s.clearCookies()
+		}
+		return out, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "revoke-other-sessions", Method: http.MethodPost, Path: "/v1/auth/sessions/revoke-others",
+		Extensions: scoped(scopeSession),
+		Summary:    "End every other session", Tags: tags, DefaultStatus: http.StatusNoContent, Security: securityUser,
+		Description: "Signs out every browser but this one.",
+	}, func(ctx context.Context, _ *struct{}) (*emptyOutput, error) {
+		p, err := requireSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.deps.Auth.RevokeOtherSessions(ctx, p.User.ID, p.Session.ID); err != nil {
+			return nil, mapErr(ctx, s.deps.Log, err)
+		}
+		return &emptyOutput{}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -263,12 +342,13 @@ func (s *Server) registerAuth() {
 		OperationID: "change-password", Method: http.MethodPost, Path: "/v1/auth/password",
 		Extensions: scoped(scopeSession),
 		Summary:    "Change password", Tags: tags, Security: securityUser,
+		Description: "Requires the current password. Every other session is signed out.",
 	}, func(ctx context.Context, in *changePasswordInput) (*emptyOutput, error) {
 		p, err := requireSession(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.deps.Auth.ChangePassword(ctx, *p.User, in.Body.CurrentPassword, in.Body.NewPassword); err != nil {
+		if err := s.deps.Auth.ChangePassword(ctx, *p.User, in.Body.CurrentPassword, in.Body.NewPassword, p.Session.ID); err != nil {
 			return nil, mapErr(ctx, s.deps.Log, err)
 		}
 		return &emptyOutput{}, nil
@@ -401,7 +481,7 @@ func (s *Server) issueSession(ctx context.Context, u store.User) (*sessionOutput
 	if err != nil {
 		return nil, mapErr(ctx, s.deps.Log, err)
 	}
-	out := &sessionOutput{SetCookie: s.sessionCookie(token, expires)}
+	out := &sessionOutput{SetCookie: s.issueCookies(token, expires)}
 	out.Body.User = u
 	return out, nil
 }

@@ -74,7 +74,7 @@ export interface paths {
         put?: never;
         /**
          * Sign in
-         * @description Checks the password and sets the session cookie used by the dashboard.
+         * @description Checks the password and sets the session cookies the dashboard uses. A session lives 30 days without use, longer while it is used, and 180 days at most.
          */
         post: operations["login"];
         delete?: never;
@@ -92,7 +92,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign out */
+        /**
+         * Sign out
+         * @description Ends this session and clears the cookies. Always succeeds, so a browser with a dead cookie can still clean up.
+         */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -129,7 +132,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change password */
+        /**
+         * Change password
+         * @description Requires the current password. Every other session is signed out.
+         */
         post: operations["change-password"];
         delete?: never;
         options?: never;
@@ -205,9 +211,69 @@ export interface paths {
         put?: never;
         /**
          * Create an account
-         * @description Creates the account, signs it in with a session cookie, and emails a verification code. Sending is blocked until the email is verified.
+         * @description Creates the account, signs it in with the session cookies, and emails a verification code. Sending is blocked until the email is verified.
          */
         post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List sessions
+         * @description Every browser signed in to this account, most recently used first. The one making the request is marked current.
+         */
+        get: operations["list-sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End a session
+         * @description Signs that browser out. Ending the current session also clears its cookies.
+         */
+        delete: operations["revoke-session"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End every other session
+         * @description Signs out every browser but this one.
+         */
+        post: operations["revoke-other-sessions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1012,6 +1078,9 @@ export interface components {
         ListKeysOutputBody: {
             data: components["schemas"]["APIKey"][];
         };
+        ListSessionsOutputBody: {
+            data: components["schemas"]["SessionView"][];
+        };
         LoginInputBody: {
             /** Format: email */
             email: string;
@@ -1188,6 +1257,27 @@ export interface components {
         };
         SessionOutputBody: {
             user: components["schemas"]["User"];
+        };
+        SessionView: {
+            /**
+             * Format: date-time
+             * @description When it signed in.
+             */
+            created_at: string;
+            /** @description True for the session making this request. */
+            current: boolean;
+            /**
+             * Format: date-time
+             * @description When it ends if it stays idle.
+             */
+            expires_at: string;
+            id: string;
+            /** @description The address it signed in from. */
+            ip: string | null;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** @description The browser that signed in, as it described itself. */
+            user_agent: string | null;
         };
         Stats: {
             /** Format: int64 */
@@ -1690,6 +1780,93 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SessionOutputBody"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "list-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSessionsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "revoke-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session id. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "revoke-other-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

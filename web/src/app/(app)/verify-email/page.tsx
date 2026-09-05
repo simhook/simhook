@@ -10,27 +10,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/field";
+import { useAccount } from "@/components/session-provider";
 import { errorMessage } from "@/lib/api";
-import { useAuthMutations, useMe } from "@/lib/queries";
+import { useAuthMutations } from "@/lib/queries";
 
 const schema = z.object({ code: z.string().length(6, "The code has 6 digits") });
 
 export default function VerifyEmailPage() {
-  const me = useMe();
+  const account = useAccount();
   const router = useRouter();
   const { verifyEmail, sendVerification } = useAuthMutations();
   const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { code: "" } });
 
   useEffect(() => {
-    if (me.data?.user.email_verified_at) router.replace("/dashboard");
-  }, [me.data, router]);
+    if (account.user.email_verified_at) router.replace("/dashboard");
+  }, [account.user.email_verified_at, router]);
 
   return (
     <div className="mx-auto max-w-md">
       <Card>
         <CardHeader>
           <CardTitle>Verify your email</CardTitle>
-          <CardDescription>We sent a 6-digit code to {me.data?.user.email}. Sending is unlocked once it&apos;s confirmed.</CardDescription>
+          <CardDescription>We sent a 6-digit code to {account.user.email}. Sending is unlocked once it&apos;s confirmed.</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -56,7 +57,12 @@ export default function VerifyEmailPage() {
                 type="button"
                 variant="ghost"
                 disabled={sendVerification.isPending}
-                onClick={() => sendVerification.mutate(undefined, { onSuccess: () => toast.success("A new code is on its way.") })}
+                onClick={() =>
+                  sendVerification.mutate(undefined, {
+                    onSuccess: () => toast.success("A new code is on its way."),
+                    onError: (e) => toast.error(errorMessage(e)),
+                  })
+                }
               >
                 Resend code
               </Button>

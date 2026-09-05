@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,15 +18,16 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 export default function RegisterPage() {
-  const router = useRouter();
   const { register: signUp } = useAuthMutations();
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
+  // The new account is signed in; the layout's redirect takes it to the
+  // email check as soon as it arrives.
+  const busy = signUp.isPending || signUp.isSuccess;
 
   const onSubmit = form.handleSubmit((values) =>
     signUp.mutate(
       { email: values.email, password: values.password, name: values.name || undefined },
       {
-        onSuccess: () => router.replace("/verify-email"),
         onError: (e) => {
           if (isApiError(e)) {
             for (const [k, v] of Object.entries(e.fieldMessages())) form.setError(k as keyof Values, { message: v });
@@ -55,8 +55,8 @@ export default function RegisterPage() {
       {signUp.isError && !Object.keys(form.formState.errors).length ? (
         <p className="text-sm text-destructive">{errorMessage(signUp.error)}</p>
       ) : null}
-      <Button type="submit" disabled={signUp.isPending}>
-        {signUp.isPending ? "Creating…" : "Create account"}
+      <Button type="submit" disabled={busy}>
+        {busy ? "Creating…" : "Create account"}
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}

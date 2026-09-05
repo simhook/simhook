@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -42,10 +43,9 @@ type Server struct {
 	api     huma.API
 	router  chi.Router
 	limiter *ratelimit.Keyed
+	// origins are the pages allowed to make cookie-authenticated writes.
+	origins map[string]bool
 }
-
-// Session cookie name.
-const sessionCookie = "simhook_session"
 
 // clientIPHeader is the one header the proxy in deploy/ fills with the
 // visitor's address. Nothing else is trusted: anything a client can send
@@ -109,7 +109,10 @@ func New(deps Deps) *Server {
 	cfg.CreateHooks = nil
 
 	api := humachi.New(router, cfg)
-	s := &Server{deps: deps, api: api, router: router, limiter: ratelimit.NewKeyed(rate.Every(3*time.Second), 20)}
+	s := &Server{deps: deps, api: api, router: router, limiter: ratelimit.NewKeyed(rate.Every(3*time.Second), 20), origins: map[string]bool{}}
+	for _, o := range deps.Config.BrowserOrigins() {
+		s.origins[o] = true
+	}
 	api.UseMiddleware(s.authenticate)
 
 	s.registerMisc()
@@ -141,10 +144,27 @@ var credentialPaths = map[string]bool{
 	"/v1/device/pair":                 true,
 }
 
+// cookiePaths are the operations that write the cookies themselves; the
+// middleware leaves the response's cookies to them.
+var cookiePaths = map[string]bool{
+	"/v1/auth/login":    true,
+	"/v1/auth/register": true,
+	"/v1/auth/logout":   true,
+}
+
+// authenticate resolves the caller and keeps the browser's cookies truthful.
+//
+// A session cookie that names no live session is not an error here: the
+// caller is simply not signed in, the handler decides what that means, and
+// both cookies are cleared so the site and the dashboard stop believing
+// otherwise. A live session missing its flag gets the flag back; a session
+// whose expiry moved gets both cookies re-issued. Cookie-authenticated
+// writes are checked against the allowed origins before anything else.
 func (s *Server) authenticate(ctx huma.Context, next func(huma.Context)) {
-	if ctx.Method() == http.MethodPost && credentialPaths[ctx.URL().Path] {
+	path := ctx.URL().Path
+	if ctx.Method() == http.MethodPost && credentialPaths[path] {
 		if err := s.throttle(ctx); err != nil {
-			_ = huma.WriteErr(s.api, ctx, http.StatusTooManyRequests, err.Error())
+			s.writeError(ctx, err)
 			return
 		}
 	}
@@ -155,29 +175,60 @@ func (s *Server) authenticate(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 	var session string
-	if c, err := huma.ReadCookie(ctx, sessionCookie); err == nil {
+	if c, err := huma.ReadCookie(ctx, sessionCookie); err == nil && c.Value != "" {
 		session = c.Value
 		ctx = huma.WithValue(ctx, sessionTokenKey{}, session)
 	}
+	_, flagErr := huma.ReadCookie(ctx, signedInCookie)
+	hasFlag := flagErr == nil
 	apiKey := ctx.Header("X-Api-Key")
 	bearer := ""
 	if h := ctx.Header("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		bearer = strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
 	}
+	// A browser request is one that carries no credential a browser would
+	// not add on its own; only those are subject to cookie rules.
+	browser := apiKey == "" && bearer == ""
+	if browser && unsafeMethod(ctx.Method()) && !originAllowed(s.origins, ctx.Header("Origin"), ctx.Header("Referer"), ctx.Header("Sec-Fetch-Site")) {
+		s.writeError(ctx, errCSRF)
+		return
+	}
+
 	p, err := s.deps.Auth.Authenticate(ctx.Context(), session, apiKey, bearer)
 	if err != nil {
-		status := http.StatusInternalServerError
-		var apiE *APIError
-		if e := mapErr(ctx.Context(), s.deps.Log, err); errors.As(e, &apiE) {
-			status = apiE.Status
+		if browser && session != "" && !cookiePaths[path] {
+			setCookies(ctx, s.clearCookies())
 		}
-		_ = huma.WriteErr(s.api, ctx, status, mapErr(ctx.Context(), s.deps.Log, err).Error())
+		s.writeError(ctx, mapErr(ctx.Context(), s.deps.Log, err))
 		return
+	}
+	if browser && !cookiePaths[path] {
+		switch {
+		case p == nil && (session != "" || hasFlag):
+			setCookies(ctx, s.clearCookies())
+		case p != nil && p.Kind == auth.KindSession && p.SessionRefreshed:
+			setCookies(ctx, s.issueCookies(session, p.Session.ExpiresAt))
+		case p != nil && p.Kind == auth.KindSession && !hasFlag:
+			setCookies(ctx, []http.Cookie{s.signedInCookieFor(p.Session.ExpiresAt)})
+		}
 	}
 	if p != nil {
 		ctx = huma.WithValue(ctx, principalKey{}, p)
 	}
 	next(ctx)
+}
+
+// writeError writes an error from middleware. huma's own helper would
+// rebuild the error from its status and lose the code.
+func (s *Server) writeError(ctx huma.Context, err error) {
+	var apiE *APIError
+	if !errors.As(err, &apiE) {
+		apiE = apiErr(http.StatusInternalServerError, "internal_error", "Something went wrong on our side.")
+	}
+	body, _ := json.Marshal(apiE)
+	ctx.SetHeader("Content-Type", "application/json")
+	ctx.SetStatus(apiE.Status)
+	_, _ = ctx.BodyWriter().Write(body)
 }
 
 type principalKey struct{}

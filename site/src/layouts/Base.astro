@@ -16,6 +16,7 @@ const {
   measure = "prose",
 } = Astro.props;
 
+const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) ?? "https://app.simhook.dev";
 const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
 const nav = [
   ["/docs", "Docs"],
@@ -40,11 +41,10 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#ffffff" />
     <script is:inline>
-      // Runs before anything is painted: if this browser was signed in the last
-      // time it asked, draw the bar that way from the first frame.
-      try {
-        if (localStorage.getItem("simhook:session") === "in") document.documentElement.dataset.session = "in";
-      } catch {}
+      // Runs before anything is painted. The API keeps a readable cookie
+      // next to the session while a browser is signed in, so the bar can be
+      // drawn right from the first frame without asking anyone.
+      if (/(^|;\s*)simhook_signed_in=/.test(document.cookie)) document.documentElement.dataset.session = "in";
     </script>
   </head>
   <body>
@@ -53,8 +53,8 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
         <a class="wm" href="/">simhook</a>
         <span class="links">{nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}</span>
         <span class="right">
-          <a class="when-out" href="https://app.simhook.dev/login">Sign in</a>
-          <a class="when-in" href="https://app.simhook.dev/dashboard">Dashboard</a>
+          <a class="when-out" href={`${app}/login`}>Sign in</a>
+          <a class="when-in" href={`${app}/dashboard`}>Dashboard</a>
           <a class="when-in" href="#" data-signout>Sign out</a>
         </span>
       </nav>
@@ -71,25 +71,24 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
       </footer>
     </div>
     <script>
-      // The page is static, but the visitor may be signed in to the app. Ask the
-      // API once per page, remember the answer for the next page, and only touch
-      // the bar when the answer differs from what is already drawn.
+      // The page is static, but the visitor may be signed in to the app. The
+      // API keeps a readable flag cookie in step with the session, so the bar
+      // follows the cookie: read again whenever the page is shown again
+      // (back and forward restore pages without running them) and after
+      // signing out here, which the API answers by clearing the cookie.
       const api = (import.meta.env.PUBLIC_API_URL as string | undefined) ?? "https://api.simhook.dev";
       const root = document.documentElement;
-      const remember = (state: "in" | "out") => {
-        if (state === "in") root.dataset.session = "in";
+      const sync = () => {
+        if (/(^|;\s*)simhook_signed_in=/.test(document.cookie)) root.dataset.session = "in";
         else delete root.dataset.session;
-        try {
-          localStorage.setItem("simhook:session", state);
-        } catch {}
       };
-      fetch(`${api}/v1/auth/me`, { credentials: "include" })
-        .then((r) => remember(r.ok ? "in" : "out"))
-        .catch(() => {});
+      sync();
+      window.addEventListener("pageshow", sync);
       document.querySelector("[data-signout]")?.addEventListener("click", (e) => {
         e.preventDefault();
-        remember("out");
-        fetch(`${api}/v1/auth/logout`, { method: "POST", credentials: "include" }).catch(() => {});
+        fetch(`${api}/v1/auth/logout`, { method: "POST", credentials: "include" })
+          .catch(() => {})
+          .finally(sync);
       });
     </script>
   </body>

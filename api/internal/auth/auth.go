@@ -66,6 +66,10 @@ type Principal struct {
 	User   *store.User
 	APIKey *store.APIKey
 	Device *store.Device
+	// Session is set for KindSession. SessionRefreshed says its expiry moved
+	// on this request, so the browser's cookies need re-issuing.
+	Session          *store.Session
+	SessionRefreshed bool
 }
 
 // HasScope reports whether the caller may perform a scoped action. Sessions
@@ -326,8 +330,10 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	return s.st.DeleteUserSessions(ctx, u.ID)
 }
 
-// ChangePassword requires the current password.
-func (s *Service) ChangePassword(ctx context.Context, u store.User, current, next string) error {
+// ChangePassword requires the current password. Every session but the one
+// making the change is signed out: whoever else held the old password is
+// no longer welcome.
+func (s *Service) ChangePassword(ctx context.Context, u store.User, current, next string, keep uuid.UUID) error {
 	if u.PasswordHash == nil || !secrets.VerifyPassword(*u.PasswordHash, current) {
 		return ErrInvalidCredentials
 	}
@@ -338,7 +344,42 @@ func (s *Service) ChangePassword(ctx context.Context, u store.User, current, nex
 	if err != nil {
 		return err
 	}
-	return s.st.SetPassword(ctx, u.ID, hash)
+	if err := s.st.SetPassword(ctx, u.ID, hash); err != nil {
+		return err
+	}
+	return s.st.DeleteOtherUserSessions(ctx, u.ID, keep)
+}
+
+// ListSessions returns the account's live sessions, most recently used first.
+func (s *Service) ListSessions(ctx context.Context, userID uuid.UUID) ([]store.Session, error) {
+	return s.st.ListUserSessions(ctx, userID)
+}
+
+// RevokeSession ends one of the account's sessions.
+func (s *Service) RevokeSession(ctx context.Context, userID, id uuid.UUID) error {
+	return s.st.DeleteUserSession(ctx, userID, id)
+}
+
+// RevokeOtherSessions ends every session of the account but the current one.
+func (s *Service) RevokeOtherSessions(ctx context.Context, userID, current uuid.UUID) error {
+	return s.st.DeleteOtherUserSessions(ctx, userID, current)
+}
+
+// SweepCredentials deletes sessions and one-time codes that have expired.
+// Nothing can present them any more; the rows are only weight.
+func (s *Service) SweepCredentials(ctx context.Context) error {
+	sessions, err := s.st.DeleteExpiredSessions(ctx)
+	if err != nil {
+		return err
+	}
+	codes, err := s.st.DeleteExpiredUserTokens(ctx)
+	if err != nil {
+		return err
+	}
+	if sessions+codes > 0 {
+		s.log.Info("expired credentials swept", "sessions", sessions, "codes", codes)
+	}
+	return nil
 }
 
 // GetUser fetches an account.
@@ -421,7 +462,8 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, name strin
 
 // Authenticate resolves a principal from whichever credential is present.
 // Precedence: device bearer, API key header, session cookie. Returns nil
-// with no error when nothing is presented.
+// with no error when nothing is presented, or when only a session cookie
+// is and it names no live session.
 func (s *Service) Authenticate(ctx context.Context, sessionToken, apiKey, bearer string) (*Principal, error) {
 	switch {
 	case strings.HasPrefix(bearer, secrets.PrefixDevice):
@@ -458,24 +500,58 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken, apiKey, bearer
 		return &Principal{Kind: KindAPIKey, User: &u, APIKey: &k}, nil
 
 	case sessionToken != "":
-		sess, err := s.st.GetLiveSession(ctx, secrets.Hash(sessionToken))
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return nil, ErrUnauthenticated
-			}
-			return nil, err
-		}
-		u, err := s.st.GetUser(ctx, sess.UserID)
-		if err != nil {
-			return nil, ErrUnauthenticated
-		}
-		if u.BannedAt != nil {
-			return nil, ErrBanned
-		}
-		s.touch(sess.ID, func(c context.Context, _ int) error { return s.st.TouchSession(c, sess.ID) })
-		return &Principal{Kind: KindSession, User: &u}, nil
+		return s.authenticateSession(ctx, sessionToken)
 	}
 	return nil, nil
+}
+
+// authenticateSession resolves a session cookie. A cookie that names no
+// live session is not an error: the browser is simply not signed in, and
+// the caller clears the cookie. Sessions slide: when less than half of the
+// idle window remains, the expiry moves out by a full window, but never
+// past the absolute cap counted from sign-in.
+func (s *Service) authenticateSession(ctx context.Context, token string) (*Principal, error) {
+	hash := secrets.Hash(token)
+	sess, err := s.st.GetLiveSession(ctx, hash)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	now := time.Now()
+	limit := sess.CreatedAt.Add(s.cfg.SessionMax())
+	if !now.Before(limit) {
+		_ = s.st.DeleteSession(ctx, hash)
+		return nil, nil
+	}
+	u, err := s.st.GetUser(ctx, sess.UserID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if u.BannedAt != nil {
+		return nil, ErrBanned
+	}
+	p := &Principal{Kind: KindSession, User: &u}
+	if sess.ExpiresAt.Sub(now) < s.cfg.SessionTTL()/2 {
+		expires := now.Add(s.cfg.SessionTTL())
+		if expires.After(limit) {
+			expires = limit
+		}
+		if expires.After(sess.ExpiresAt) {
+			if err := s.st.ExtendSession(ctx, sess.ID, expires); err != nil {
+				return nil, err
+			}
+			sess.ExpiresAt = expires
+			p.SessionRefreshed = true
+		}
+	}
+	p.Session = &sess
+	s.touch(sess.ID, func(c context.Context, _ int) error { return s.st.TouchSession(c, sess.ID) })
+	return p, nil
 }
 
 // touch runs a credential's bookkeeping write off the request path, at most

@@ -105,6 +105,7 @@ func Build(ctx context.Context, cfg *config.Config, log *slog.Logger, opts Optio
 	river.AddWorker(workers, gateway.NewPresenceWorker(gwSvc))
 	river.AddWorker(workers, webhooks.NewDeliverWorker(hooksSvc))
 	river.AddWorker(workers, webhooks.NewAutoPauseWorker(hooksSvc))
+	river.AddWorker(workers, auth.NewSweepWorker(authSvc))
 
 	var periodic []*river.PeriodicJob
 	if opts.PeriodicJobs {
@@ -117,6 +118,9 @@ func Build(ctx context.Context, cfg *config.Config, log *slog.Logger, opts Optio
 				&river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(24*time.Hour),
 				func() (river.JobArgs, *river.InsertOpts) { return webhooks.AutoPauseArgs{}, nil },
+				&river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(24*time.Hour),
+				func() (river.JobArgs, *river.InsertOpts) { return auth.SweepArgs{}, nil },
 				&river.PeriodicJobOpts{RunOnStart: true}),
 		}
 	}

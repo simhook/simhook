@@ -96,3 +96,35 @@ export function statusTone(status: string): "ok" | "warn" | "bad" | "muted" {
 export function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
+
+/** "Chrome on Windows", from a User-Agent string, for the sessions list. */
+export function browserName(ua: string | null | undefined): string {
+  if (!ua) return "Unknown browser";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\//.test(ua)
+      ? "Opera"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Chrome\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : /curl\//.test(ua)
+              ? "curl"
+              : "Unknown browser";
+  const os = /Windows/.test(ua)
+    ? "Windows"
+    : /iPhone|iPad/.test(ua)
+      ? "iOS"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Mac OS X|Macintosh/.test(ua)
+          ? "macOS"
+          : /CrOS/.test(ua)
+            ? "ChromeOS"
+            : /Linux/.test(ua)
+              ? "Linux"
+              : "";
+  return os ? `${browser} on ${os}` : browser;
+}

@@ -198,8 +198,16 @@ func (h *harness) signUp(t *testing.T, email string) *client {
 	t.Helper()
 	c := &client{t: t, base: h.srv.URL}
 	r := c.must("POST", "/v1/auth/register", map[string]any{"email": email, "password": "hunter2hunter2"}, 201)
-	c.cookie = r.cookie
+	c.signIn(r)
 	c.must("POST", "/v1/auth/verify-email", map[string]any{"code": h.mailer.lastCode(t)}, 200)
+	return c
+}
+
+// login signs an existing account in on a fresh client.
+func (h *harness) login(t *testing.T, email, password string) *client {
+	t.Helper()
+	c := &client{t: t, base: h.srv.URL}
+	c.signIn(c.must("POST", "/v1/auth/login", map[string]any{"email": email, "password": password}, 200))
 	return c
 }
 
@@ -218,18 +226,42 @@ func (h *harness) pairPhone(t *testing.T, account *client, hardwareKey, pushToke
 // ---------------------------------------------------------------------------
 
 type client struct {
-	t      *testing.T
-	base   string
-	cookie *http.Cookie
-	apiKey string
-	bearer string
+	t       *testing.T
+	base    string
+	cookie  *http.Cookie // the session cookie
+	flag    *http.Cookie // the readable signed-in flag
+	apiKey  string
+	bearer  string
+	headers map[string]string
 }
 
 type resp struct {
-	status int
-	body   map[string]any
-	raw    []byte
-	cookie *http.Cookie
+	status     int
+	body       map[string]any
+	raw        []byte
+	cookie     *http.Cookie            // the session cookie, if set
+	cookies    map[string]*http.Cookie // every cookie set, by name
+	setCookies []*http.Cookie          // every Set-Cookie header, in order
+}
+
+// signIn takes the cookies a sign-in response set.
+func (c *client) signIn(r resp) {
+	c.t.Helper()
+	if r.cookies["simhook_session"] == nil || r.cookies["simhook_signed_in"] == nil {
+		c.t.Fatalf("sign-in must set both cookies, got %v", r.setCookies)
+	}
+	c.cookie, c.flag = r.cookies["simhook_session"], r.cookies["simhook_signed_in"]
+}
+
+// cleared reports whether a response expires both cookies.
+func cleared(r resp) bool {
+	for _, name := range []string{"simhook_session", "simhook_signed_in"} {
+		c := r.cookies[name]
+		if c == nil || c.Value != "" || c.MaxAge >= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *client) do(method, path string, in any) resp {
@@ -244,7 +276,10 @@ func (c *client) do(method, path string, in any) resp {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if c.cookie != nil {
-		req.AddCookie(c.cookie)
+		req.AddCookie(&http.Cookie{Name: c.cookie.Name, Value: c.cookie.Value})
+	}
+	if c.flag != nil {
+		req.AddCookie(&http.Cookie{Name: c.flag.Name, Value: c.flag.Value})
 	}
 	if c.apiKey != "" {
 		req.Header.Set("X-Api-Key", c.apiKey)
@@ -252,22 +287,34 @@ func (c *client) do(method, path string, in any) resp {
 	if c.bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+c.bearer)
 	}
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.t.Fatalf("%s %s: %v", method, path, err)
 	}
 	defer res.Body.Close()
 	raw, _ := io.ReadAll(res.Body)
-	out := resp{status: res.StatusCode, raw: raw}
+	out := resp{status: res.StatusCode, raw: raw, cookies: map[string]*http.Cookie{}}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &out.body)
 	}
 	for _, ck := range res.Cookies() {
+		out.setCookies = append(out.setCookies, ck)
+		out.cookies[ck.Name] = ck
 		if ck.Name == "simhook_session" {
 			out.cookie = ck
 		}
 	}
 	return out
+}
+
+// with returns a copy of the client that sends extra request headers.
+func (c *client) with(headers map[string]string) *client {
+	cp := *c
+	cp.headers = headers
+	return &cp
 }
 
 func (c *client) must(method, path string, in any, want int) resp {
@@ -530,8 +577,10 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("device list after unpair: %s", r.raw)
 	}
 
-	// Sessions: logout kills the cookie.
-	web.must("POST", "/v1/auth/logout", nil, 204)
+	// Sign-out clears both cookies.
+	if r = web.must("POST", "/v1/auth/logout", nil, 204); !cleared(r) {
+		t.Fatalf("logout should clear both cookies: %v", r.setCookies)
+	}
 	web.must("GET", "/v1/auth/me", nil, 401)
 
 	if hooks.badSig != 0 {
@@ -668,4 +717,173 @@ func TestCredentialHardening(t *testing.T) {
 	}
 	// Another account is unaffected.
 	other.must("POST", "/v1/auth/login", map[string]any{"email": "nobody@example.com", "password": "hunter2hunter2"}, 401)
+}
+
+// TestSessions is the cookie contract with the browser: what sign-in sets,
+// what a dead cookie gets back, expiry that slides under a cap, the origin
+// check on cookie-authenticated writes, and seeing and ending sessions.
+func TestSessions(t *testing.T) {
+	h := startApp(t)
+	const email, password = "cookie@example.com", "hunter2hunter2"
+	web := &client{t: t, base: h.srv.URL}
+
+	// Sign-in sets two cookies: the httpOnly session and the readable flag,
+	// expiring together.
+	r := web.must("POST", "/v1/auth/register", map[string]any{"email": email, "password": password}, 201)
+	web.signIn(r)
+	sess, flag := web.cookie, web.flag
+	if !sess.HttpOnly || sess.SameSite != http.SameSiteLaxMode || sess.Path != "/" || sess.Expires.IsZero() || sess.Domain != "" {
+		t.Fatalf("session cookie: %s", sess)
+	}
+	if flag.HttpOnly || flag.Value != "1" || flag.SameSite != http.SameSiteLaxMode || flag.Expires.Sub(sess.Expires).Abs() > time.Second {
+		t.Fatalf("flag cookie: %s", flag)
+	}
+	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": h.mailer.lastCode(t)}, 200)
+
+	// A healthy session is left alone; a missing flag is put back on its own.
+	if r = web.must("GET", "/v1/auth/me", nil, 200); len(r.setCookies) != 0 {
+		t.Fatalf("a healthy session should not be rewritten: %v", r.setCookies)
+	}
+	web.flag = nil
+	r = web.must("GET", "/v1/auth/me", nil, 200)
+	if c := r.cookies["simhook_signed_in"]; c == nil || c.Value != "1" || len(r.setCookies) != 1 {
+		t.Fatalf("a missing flag should come back alone: %v", r.setCookies)
+	}
+	web.flag = flag
+
+	// The session slides: once under half of the idle window remains, both
+	// cookies are re-issued with the new expiry and the same token.
+	execSQL(t, `update sessions set expires_at = now() + interval '1 hour'`)
+	r = web.must("GET", "/v1/auth/me", nil, 200)
+	fresh := r.cookies["simhook_session"]
+	if fresh == nil || fresh.Value != sess.Value || fresh.Expires.Before(time.Now().Add(29*24*time.Hour)) || r.cookies["simhook_signed_in"] == nil {
+		t.Fatalf("sliding refresh: %v", r.setCookies)
+	}
+	if r = web.must("GET", "/v1/auth/me", nil, 200); len(r.setCookies) != 0 {
+		t.Fatalf("a refreshed session should not be refreshed again at once: %v", r.setCookies)
+	}
+	// Never past the cap: an old session ends however active it is.
+	execSQL(t, `update sessions set created_at = now() - interval '181 days'`)
+	r = web.do("GET", "/v1/auth/me", nil)
+	if r.status != 401 || str(r.body, "code") != "unauthenticated" || !cleared(r) {
+		t.Fatalf("a capped session should end and clear the cookies: %d %s %v", r.status, r.raw, r.setCookies)
+	}
+
+	// Garbage in the cookie is not an error, but both cookies are cleared;
+	// so is a flag with no session behind it, even on a public request.
+	stale := &client{t: t, base: h.srv.URL, cookie: &http.Cookie{Name: "simhook_session", Value: "shs_nonsense"}}
+	if r = stale.do("GET", "/v1/auth/me", nil); r.status != 401 || !cleared(r) {
+		t.Fatalf("dead cookie: %d %v", r.status, r.setCookies)
+	}
+	flagOnly := &client{t: t, base: h.srv.URL, flag: &http.Cookie{Name: "simhook_signed_in", Value: "1"}}
+	if r = flagOnly.must("GET", "/v1/plans", nil, 200); !cleared(r) {
+		t.Fatalf("a stale flag should be cleared on any request: %v", r.setCookies)
+	}
+	// A dead cookie does not stop the browser signing in again, and sign-in
+	// writes only its own cookies.
+	r = stale.must("POST", "/v1/auth/login", map[string]any{"email": email, "password": password}, 200)
+	if len(r.setCookies) != 2 {
+		t.Fatalf("sign-in should set exactly the two cookies: %v", r.setCookies)
+	}
+	web.signIn(r)
+
+	// A wrong current password is a 401, not the end of the session.
+	r = web.do("POST", "/v1/auth/password", map[string]any{"current_password": "not-the-password", "new_password": "hunter3hunter3"})
+	if r.status != 401 || str(r.body, "code") != "invalid_credentials" || len(r.setCookies) != 0 {
+		t.Fatalf("wrong current password: %d %s %v", r.status, r.raw, r.setCookies)
+	}
+	web.must("GET", "/v1/auth/me", nil, 200)
+
+	// Cookie-authenticated writes must come from our own pages.
+	for _, tc := range []struct {
+		name    string
+		headers map[string]string
+		want    int
+	}{
+		{"no source", nil, 201},
+		{"the dashboard", map[string]string{"Origin": "http://localhost:3000"}, 201},
+		{"a dashboard page as referer", map[string]string{"Referer": "http://localhost:3000/devices?x=1"}, 201},
+		{"a foreign origin", map[string]string{"Origin": "https://evil.example"}, 403},
+		{"a foreign referer", map[string]string{"Referer": "https://evil.example/"}, 403},
+		{"an opaque origin", map[string]string{"Origin": "null"}, 403},
+		{"a cross-site fetch", map[string]string{"Sec-Fetch-Site": "cross-site"}, 403},
+	} {
+		r = web.with(tc.headers).do("POST", "/v1/devices/pairing-codes", nil)
+		if r.status != tc.want {
+			t.Fatalf("%s: want %d, got %d %s", tc.name, tc.want, r.status, r.raw)
+		}
+		if tc.want == 403 && (str(r.body, "code") != "csrf_rejected" || len(r.setCookies) != 0) {
+			t.Fatalf("%s: a refused write keeps its code and the session: %s %v", tc.name, r.raw, r.setCookies)
+		}
+	}
+	web.with(map[string]string{"Origin": "https://evil.example"}).must("GET", "/v1/devices", nil, 200) // reads are not checked
+	foreign := &client{t: t, base: h.srv.URL, headers: map[string]string{"Origin": "https://evil.example"}}
+	if r = foreign.do("POST", "/v1/auth/login", map[string]any{"email": email, "password": password}); r.status != 403 {
+		t.Fatalf("sign-in from a foreign page: %d %s", r.status, r.raw)
+	}
+	// Browsers never add an API key on their own, so a key is not checked.
+	r = web.must("POST", "/v1/api-keys", map[string]any{"name": "csrf"}, 201)
+	dev := &client{t: t, base: h.srv.URL, apiKey: str(r.body, "key"), headers: map[string]string{"Origin": "https://evil.example"}}
+	dev.must("POST", "/v1/devices/pairing-codes", nil, 201)
+
+	// Sessions can be seen and ended.
+	other := h.login(t, email, password)
+	r = web.must("GET", "/v1/auth/sessions", nil, 200)
+	list := r.body["data"].([]any)
+	if len(list) != 2 {
+		t.Fatalf("two sessions: %s", r.raw)
+	}
+	var otherID string
+	for _, item := range list {
+		m := item.(map[string]any)
+		if m["current"] == true {
+			if m["ip"] == nil || m["user_agent"] == nil {
+				t.Fatalf("a session knows where it came from: %v", m)
+			}
+			continue
+		}
+		otherID = m["id"].(string)
+	}
+	if otherID == "" {
+		t.Fatalf("one session is current, the other is not: %s", r.raw)
+	}
+	web.must("DELETE", "/v1/auth/sessions/"+otherID, nil, 204)
+	other.must("GET", "/v1/auth/me", nil, 401)
+	web.must("DELETE", "/v1/auth/sessions/"+otherID, nil, 404)
+	// Ending your own session clears the cookies.
+	third := h.login(t, email, password)
+	r = third.must("GET", "/v1/auth/sessions", nil, 200)
+	var thirdID string
+	for _, item := range r.body["data"].([]any) {
+		if m := item.(map[string]any); m["current"] == true {
+			thirdID = m["id"].(string)
+		}
+	}
+	if r = third.must("DELETE", "/v1/auth/sessions/"+thirdID, nil, 204); !cleared(r) {
+		t.Fatalf("ending the current session should clear the cookies: %v", r.setCookies)
+	}
+	third.must("GET", "/v1/auth/me", nil, 401)
+
+	// Changing the password keeps this session and ends every other one.
+	fourth := h.login(t, email, password)
+	web.must("POST", "/v1/auth/password", map[string]any{"current_password": password, "new_password": "hunter3hunter3"}, 204)
+	web.must("GET", "/v1/auth/me", nil, 200)
+	fourth.must("GET", "/v1/auth/me", nil, 401)
+	// So does "sign out everywhere else".
+	fifth := h.login(t, email, "hunter3hunter3")
+	web.must("POST", "/v1/auth/sessions/revoke-others", nil, 204)
+	fifth.must("GET", "/v1/auth/me", nil, 401)
+	web.must("GET", "/v1/auth/me", nil, 200)
+
+	// A session cannot be found by an API key.
+	dev.must("GET", "/v1/auth/sessions", nil, 401)
+
+	// Sign-out clears both cookies, and works again on the dead cookie.
+	if r = web.must("POST", "/v1/auth/logout", nil, 204); !cleared(r) {
+		t.Fatalf("logout: %v", r.setCookies)
+	}
+	if r = web.must("POST", "/v1/auth/logout", nil, 204); !cleared(r) {
+		t.Fatalf("logout with a dead cookie: %v", r.setCookies)
+	}
+	web.must("GET", "/v1/auth/me", nil, 401)
 }

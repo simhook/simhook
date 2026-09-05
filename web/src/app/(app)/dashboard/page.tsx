@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { OnlineDot, StatusBadge } from "@/components/status-badge";
 import { formatCount, limitLabel, messageStatusLabel, relativeTime, truncate } from "@/lib/format";
-import { useApiKeys, useDevices, useMe, useMessages, useStats, useWebhooks } from "@/lib/queries";
+import { useAccount } from "@/components/session-provider";
+import { useApiKeys, useDevices, useMessages, useStats, useWebhooks } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -51,21 +52,18 @@ function Section({ title, aside, children }: { title: string; aside?: React.Reac
 }
 
 export default function DashboardPage() {
-  const me = useMe();
+  const { user, limits, usage } = useAccount();
   const stats = useStats();
   const devices = useDevices(15_000);
   const keys = useApiKeys();
   const hooks = useWebhooks();
   const recent = useMessages({}, 8);
 
-  const user = me.data?.user;
-  const limits = me.data?.limits;
-  const usage = me.data?.usage;
   const deviceList = devices.data?.data ?? [];
   const online = deviceList.filter((d) => d.online);
   const hookList = hooks.data?.data ?? [];
   const steps = [
-    { done: !!user?.email_verified_at, label: "Verify your email", href: "/verify-email" },
+    { done: !!user.email_verified_at, label: "Verify your email", href: "/verify-email" },
     { done: deviceList.length > 0, label: "Pair an Android phone", href: "/devices" },
     { done: (keys.data?.data.length ?? 0) > 0, label: "Create an API key", href: "/api-keys" },
     { done: (stats.data?.sent ?? 0) > 0, label: "Send your first message", href: "/messages" },
@@ -85,7 +83,7 @@ export default function DashboardPage() {
           ? `${first.name} is online.`
           : `${online.length} phones are online.`,
     ];
-    if (usage) parts.push(`${formatCount(usage.sent_today)} sent today.`);
+    parts.push(`${formatCount(usage.sent_today)} sent today.`);
     return parts.join(" ");
   })();
 
@@ -96,7 +94,7 @@ export default function DashboardPage() {
       <div className="mb-12 grid grid-cols-2 gap-8 sm:grid-cols-4">
         <Stat label="sent" value={formatCount(stats.data?.sent)} />
         <Stat label="received" value={formatCount(stats.data?.received)} />
-        <Stat label="phones" value={formatCount(stats.data?.devices)} hint={`${online.length} online, ${limits ? limitLabel(limits.device_limit) : "…"} allowed`} />
+        <Stat label="phones" value={formatCount(stats.data?.devices)} hint={`${online.length} online, ${limitLabel(limits.device_limit)} allowed`} />
         <Stat label="webhooks" value={formatCount(hookList.length)} hint={hookList.some((h) => !h.enabled) ? "one is paused" : undefined} />
       </div>
 
@@ -187,19 +185,17 @@ export default function DashboardPage() {
           )}
         </Section>
 
-        <Section title={limits ? `${limits.plan_name.toLowerCase()} plan` : "plan"}>
-          {limits && usage ? (
-            <div className="grid gap-4 border-t pt-4">
-              <UsageLine label="Today" used={usage.sent_today} limit={limits.daily_limit} />
-              <UsageLine label="This month" used={usage.sent_this_month} limit={limits.monthly_limit} />
-              <p className="text-xs text-muted-foreground">
-                Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.{" "}
-                <Link href="/settings" className="underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
-                  Plans
-                </Link>
-              </p>
-            </div>
-          ) : null}
+        <Section title={`${limits.plan_name.toLowerCase()} plan`}>
+          <div className="grid gap-4 border-t pt-4">
+            <UsageLine label="Today" used={usage.sent_today} limit={limits.daily_limit} />
+            <UsageLine label="This month" used={usage.sent_this_month} limit={limits.monthly_limit} />
+            <p className="text-xs text-muted-foreground">
+              Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.{" "}
+              <Link href="/settings" className="underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground">
+                Plans
+              </Link>
+            </p>
+          </div>
         </Section>
       </div>
     </>

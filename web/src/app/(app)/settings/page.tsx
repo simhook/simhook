@@ -11,9 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/field";
 import { PageHeader } from "@/components/page-header";
+import { useAccount } from "@/components/session-provider";
 import { errorMessage } from "@/lib/api";
-import { absoluteTime, formatCount, limitLabel, priceLabel } from "@/lib/format";
-import { useAuthMutations, useMe, usePlans } from "@/lib/queries";
+import { absoluteTime, browserName, formatCount, limitLabel, priceLabel, relativeTime } from "@/lib/format";
+import { useAuthMutations, usePlans, useSessionMutations, useSessions } from "@/lib/queries";
 
 function ProfileCard({ user }: { user: User }) {
   const { updateProfile, sendVerification } = useAuthMutations();
@@ -50,22 +51,98 @@ function ProfileCard({ user }: { user: User }) {
   );
 }
 
+/** Every browser signed in to the account, and a way to end any of them. */
+function SessionsSection() {
+  const sessions = useSessions();
+  const { revoke, revokeOthers } = useSessionMutations();
+  const list = sessions.data?.data ?? [];
+  const others = list.filter((s) => !s.current).length;
+  const link = "text-sm underline decoration-[#b8b8b4] underline-offset-4 hover:decoration-foreground disabled:opacity-50";
+  return (
+    <section className="lg:col-span-2">
+      <div className="mb-2 flex items-baseline justify-between gap-4">
+        <h2 className="font-mono text-xs tracking-wide text-muted-foreground">sessions</h2>
+        {others > 0 ? (
+          <button
+            type="button"
+            className={link}
+            disabled={revokeOthers.isPending}
+            onClick={() =>
+              revokeOthers.mutate(undefined, {
+                onSuccess: () => toast.success("Every other browser is signed out."),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+          >
+            Sign out everywhere else
+          </button>
+        ) : null}
+      </div>
+      {sessions.isPending ? (
+        <Skeleton className="h-24" />
+      ) : sessions.isError ? (
+        <p className="border-y py-6 text-sm">
+          <span className="text-destructive">{errorMessage(sessions.error)}</span>{" "}
+          <button type="button" className={link} onClick={() => sessions.refetch()}>
+            Try again
+          </button>
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Browser</TableHead>
+              <TableHead>Address</TableHead>
+              <TableHead>Signed in</TableHead>
+              <TableHead>Last seen</TableHead>
+              <TableHead className="text-right" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {list.map((s) => (
+              <TableRow key={s.id}>
+                <TableCell>{browserName(s.user_agent)}</TableCell>
+                <TableCell className="font-mono text-xs">{s.ip ?? ""}</TableCell>
+                <TableCell title={absoluteTime(s.created_at)}>{relativeTime(s.created_at)}</TableCell>
+                <TableCell title={absoluteTime(s.last_seen_at)}>{relativeTime(s.last_seen_at)}</TableCell>
+                <TableCell className="text-right">
+                  {s.current ? (
+                    <span className="text-muted-foreground">This browser</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={link}
+                      disabled={revoke.isPending}
+                      onClick={() => revoke.mutate(s.id, { onError: (e) => toast.error(errorMessage(e)) })}
+                    >
+                      Sign out
+                    </button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      <p className="mt-3 text-sm text-muted-foreground">
+        A session ends after 30 days unused, and 180 days after signing in at the latest. Changing your password signs out every other browser.
+      </p>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
-  const me = useMe();
+  const { user, limits, usage } = useAccount();
   const plans = usePlans();
   const { changePassword } = useAuthMutations();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
 
-  const user = me.data?.user;
-  const limits = me.data?.limits;
-  const usage = me.data?.usage;
-
   return (
     <>
       <PageHeader title="Settings" description="Your account and plan." />
       <div className="grid gap-6 lg:grid-cols-2">
-        {user ? <ProfileCard key={user.id} user={user} /> : <Skeleton className="h-48" />}
+        <ProfileCard key={user.id} user={user} />
 
         <Card>
           <CardHeader>
@@ -106,8 +183,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Plan</CardTitle>
             <CardDescription>
-              You are on the {limits?.plan_name ?? "…"} plan
-              {usage && limits ? ` · ${formatCount(usage.sent_this_month)} of ${limitLabel(limits.monthly_limit)} messages used this month` : ""}.
+              You are on the {limits.plan_name} plan, {formatCount(usage.sent_this_month)} of {limitLabel(limits.monthly_limit)} messages used this month.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -128,7 +204,7 @@ export default function SettingsPage() {
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">
                         {p.name}
-                        {p.id === limits?.plan_id ? <Badge variant="secondary" className="ml-2">current</Badge> : null}
+                        {p.id === limits.plan_id ? <Badge variant="secondary" className="ml-2">current</Badge> : null}
                       </TableCell>
                       <TableCell>{limitLabel(p.daily_limit)}</TableCell>
                       <TableCell>{limitLabel(p.monthly_limit)}</TableCell>
@@ -146,6 +222,8 @@ export default function SettingsPage() {
             <p className="mt-3 text-sm text-muted-foreground">Upgrades open soon. Until then, limits above apply.</p>
           </CardContent>
         </Card>
+
+        <SessionsSection />
       </div>
     </>
   );

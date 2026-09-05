@@ -195,6 +195,52 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID uuid.UUID) error 
 	return err
 }
 
+// ExtendSession moves the idle deadline of a session.
+func (s *Store) ExtendSession(ctx context.Context, id uuid.UUID, expires time.Time) error {
+	_, err := s.q.Exec(ctx, `update sessions set expires_at = $2, last_seen_at = now() where id = $1`, id, expires)
+	return err
+}
+
+// ListUserSessions returns the live sessions of an account, most recently
+// used first.
+func (s *Store) ListUserSessions(ctx context.Context, userID uuid.UUID) ([]Session, error) {
+	return many[Session](s.q.Query(ctx, `
+		select `+sessionCols+` from sessions
+		where user_id = $1 and expires_at > now()
+		order by last_seen_at desc, created_at desc`, userID))
+}
+
+// DeleteUserSession ends one session of an account. ErrNotFound when the
+// session is not theirs or already gone.
+func (s *Store) DeleteUserSession(ctx context.Context, userID, id uuid.UUID) error {
+	tag, err := s.q.Exec(ctx, `delete from sessions where id = $1 and user_id = $2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteOtherUserSessions ends every session of an account but one.
+func (s *Store) DeleteOtherUserSessions(ctx context.Context, userID, keep uuid.UUID) error {
+	_, err := s.q.Exec(ctx, `delete from sessions where user_id = $1 and id <> $2`, userID, keep)
+	return err
+}
+
+// DeleteExpiredSessions removes sessions no cookie can name any more.
+func (s *Store) DeleteExpiredSessions(ctx context.Context) (int64, error) {
+	tag, err := s.q.Exec(ctx, `delete from sessions where expires_at <= now()`)
+	return tag.RowsAffected(), err
+}
+
+// DeleteExpiredUserTokens removes one-time codes a day past their expiry.
+func (s *Store) DeleteExpiredUserTokens(ctx context.Context) (int64, error) {
+	tag, err := s.q.Exec(ctx, `delete from user_tokens where expires_at < now() - interval '1 day'`)
+	return tag.RowsAffected(), err
+}
+
 // ---------------------------------------------------------------------------
 // API keys
 // ---------------------------------------------------------------------------

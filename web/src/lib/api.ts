@@ -29,8 +29,12 @@ export class ApiError extends Error {
     this.fields = fields;
   }
 
-  get isUnauthenticated() {
-    return this.status === 401;
+  /**
+   * The session behind the request is gone. Only a 401 that says so counts:
+   * a wrong current password is a 401 too, and must not sign anyone out.
+   */
+  get isSessionLost() {
+    return this.status === 401 && (this.code === "unauthenticated" || this.code === "session_required");
   }
 
   /** A per-field message keyed by the last path segment, e.g. "email" for "body.email". */

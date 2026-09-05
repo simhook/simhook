@@ -849,6 +849,21 @@
         ],
         "type": "object"
       },
+      "ListSessionsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SessionView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "LoginInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1467,6 +1482,56 @@
         ],
         "type": "object"
       },
+      "SessionView": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "description": "When it signed in.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "current": {
+            "description": "True for the session making this request.",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "description": "When it ends if it stays idle.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ip": {
+            "description": "The address it signed in from.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user_agent": {
+            "description": "The browser that signed in, as it described itself.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "user_agent",
+          "ip",
+          "created_at",
+          "last_seen_at",
+          "expires_at",
+          "current"
+        ],
+        "type": "object"
+      },
       "Stats": {
         "additionalProperties": false,
         "properties": {
@@ -2072,7 +2137,7 @@
     },
     "/v1/auth/login": {
       "post": {
-        "description": "Checks the password and sets the session cookie used by the dashboard.",
+        "description": "Checks the password and sets the session cookies the dashboard uses. A session lives 30 days without use, longer while it is used, and 180 days at most.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -2121,6 +2186,7 @@
     },
     "/v1/auth/logout": {
       "post": {
+        "description": "Ends this session and clears the cookies. Always succeeds, so a browser with a dead cookie can still clean up.",
         "operationId": "logout",
         "responses": {
           "204": {
@@ -2201,6 +2267,7 @@
     },
     "/v1/auth/password": {
       "post": {
+        "description": "Requires the current password. Every other session is signed out.",
         "operationId": "change-password",
         "requestBody": {
           "content": {
@@ -2364,7 +2431,7 @@
     },
     "/v1/auth/register": {
       "post": {
-        "description": "Creates the account, signs it in with a session cookie, and emails a verification code. Sending is blocked until the email is verified.",
+        "description": "Creates the account, signs it in with the session cookies, and emails a verification code. Sending is blocked until the email is verified.",
         "operationId": "register",
         "requestBody": {
           "content": {
@@ -2409,6 +2476,134 @@
         "tags": [
           "auth"
         ]
+      }
+    },
+    "/v1/auth/sessions": {
+      "get": {
+        "description": "Every browser signed in to this account, most recently used first. The one making the request is marked current.",
+        "operationId": "list-sessions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSessionsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List sessions",
+        "tags": [
+          "auth"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/auth/sessions/revoke-others": {
+      "post": {
+        "description": "Signs out every browser but this one.",
+        "operationId": "revoke-other-sessions",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "End every other session",
+        "tags": [
+          "auth"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/auth/sessions/{id}": {
+      "delete": {
+        "description": "Signs that browser out. Ending the current session also clears its cookies.",
+        "operationId": "revoke-session",
+        "parameters": [
+          {
+            "description": "Session id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Session id.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "End a session",
+        "tags": [
+          "auth"
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/auth/verify-email": {

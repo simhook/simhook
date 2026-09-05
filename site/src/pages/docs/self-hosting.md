@@ -20,7 +20,7 @@ curl -fsSL https://get.docker.com | sh
 git clone https://github.com/simhook/simhook.git /opt/simhook
 cd /opt/simhook/deploy
 cp .env.example .env          # domains, Cloudflare token, database password
-cp api.env.example api.env    # secret key, SMTP, admin email
+cp api.env.example api.env    # secret key, SMTP
 mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
 chown 10001:10001 secrets/fcm.json && chmod 400 secrets/fcm.json
 docker compose -f docker-compose.prod.yaml up -d --build
@@ -39,7 +39,8 @@ Two things are built into the app and worth knowing:
 
 ## Keeping it healthy
 
-- `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets and signs sessions. Losing it means every webhook needs a new secret and everyone signs in again. Keep a copy off the host.
+- `SIMHOOK_SECRET_KEY` encrypts stored webhook secrets. Losing it means every webhook needs a new secret. Keep a copy off the host.
+- The API, the dashboard, and the site must share a parent domain (`api.` and `app.` under your root domain, which the Compose file assumes). The API sets a readable signed-in flag cookie on that domain so the site and the dashboard know who is signed in before asking. If your dashboard has to live elsewhere, leave `SIMHOOK_COOKIE_DOMAIN` empty on the API and set `SIMHOOK_SESSION_FLAG=off` on the dashboard.
 - The `backup` service writes a dump every day into `deploy/backups`. Copy that directory somewhere else on a schedule; a backup on the same disk is not a backup.
 - Update with `git pull` and `docker compose up -d --build`, or pull the images the repository's CI publishes to GitHub's registry.
 

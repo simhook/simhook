@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useSession } from "@/components/session-provider";
 import { Bar, Footer, Shell, SITE_URL } from "@/components/site-chrome";
-import { isApiError } from "@/lib/api";
-import { useAuthMutations, useMe } from "@/lib/queries";
 
 const nav = [
   { href: "/dashboard", label: "Overview" },
@@ -18,10 +17,8 @@ const nav = [
 
 function AppBar() {
   const pathname = usePathname();
-  const me = useMe();
-  const { logout } = useAuthMutations();
-  const router = useRouter();
-  const email = me.data?.user.email ?? "";
+  const session = useSession();
+  const email = session.status === "authenticated" ? session.account.user.email : "";
   return (
     <Bar
       links={nav}
@@ -34,11 +31,7 @@ function AppBar() {
           <a href={`${SITE_URL}/docs`} className="hover:text-foreground">
             Docs
           </a>
-          <button
-            type="button"
-            className="hover:text-foreground"
-            onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
-          >
+          <button type="button" className="hover:text-foreground" onClick={() => void session.signOut()}>
             Sign out
           </button>
         </>
@@ -48,12 +41,12 @@ function AppBar() {
 }
 
 function VerifyBanner() {
-  const me = useMe();
+  const session = useSession();
   const pathname = usePathname();
-  if (!me.data || me.data.user.email_verified_at || pathname === "/verify-email") return null;
+  if (session.status !== "authenticated" || session.account.user.email_verified_at || pathname === "/verify-email") return null;
   return (
     <p className="mt-6 border-l-2 border-foreground pl-4 text-sm">
-      <span className="font-medium">Verify your email to start sending.</span> We sent a code to {me.data.user.email}.{" "}
+      <span className="font-medium">Verify your email to start sending.</span> We sent a code to {session.account.user.email}.{" "}
       <Link href="/verify-email" className="underline">
         Enter the code
       </Link>
@@ -61,20 +54,16 @@ function VerifyBanner() {
   );
 }
 
-/** Signed-in frame: the shared shell with the app's words in the bar, and the auth gate. */
+/**
+ * Signed-in frame: the shared shell with the app's words in the bar. The
+ * frame paints at once; the words wait for the account. A visitor with no
+ * session sees the same frame while the session provider sends them to
+ * sign-in.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
-  const me = useMe();
-  const router = useRouter();
-  const pathname = usePathname();
+  const session = useSession();
 
-  useEffect(() => {
-    if (me.isError && isApiError(me.error) && me.error.isUnauthenticated) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-    }
-  }, [me.isError, me.error, router, pathname]);
-
-  if (me.isPending || (me.isError && isApiError(me.error) && me.error.isUnauthenticated)) {
-    // The frame paints at once; only the words wait for the account to arrive.
+  if (session.status === "loading" || session.status === "unauthenticated") {
     return (
       <Shell>
         <AppBar />
@@ -89,15 +78,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (me.isError) {
+  if (session.status === "error") {
     return (
       <Shell>
-        <p className="mt-10 border-l-2 border-destructive pl-4 text-sm">
-          <span className="font-medium text-destructive">The API is not reachable.</span> {me.error.message}{" "}
-          <button className="underline" onClick={() => me.refetch()}>
-            Try again
-          </button>
-        </p>
+        <AppBar />
+        <main className="flex-1">
+          <p className="mt-10 border-l-2 border-destructive pl-4 text-sm">
+            <span className="font-medium text-destructive">The API is not reachable.</span> {session.error.message}{" "}
+            <button type="button" className="underline" onClick={session.retry}>
+              Try again
+            </button>
+          </p>
+        </main>
+        <Footer />
       </Shell>
     );
   }

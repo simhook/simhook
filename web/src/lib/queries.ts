@@ -1,8 +1,8 @@
 "use client";
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { paths } from "@simhook/contracts";
-import { api, unwrap } from "./api";
+import { queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { MeOutputBody, paths } from "@simhook/contracts";
+import { api, isApiError, unwrap } from "./api";
 
 type Body<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
   requestBody: { content: { "application/json": infer B } };
@@ -12,6 +12,7 @@ type Body<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends
 
 export const keys = {
   me: ["me"] as const,
+  sessions: ["sessions"] as const,
   stats: ["stats"] as const,
   devices: ["devices"] as const,
   device: (id: string) => ["devices", id] as const,
@@ -27,18 +28,29 @@ export const keys = {
 };
 
 // ---------------------------------------------------------------------------
-// Account
+// Account and sessions
 // ---------------------------------------------------------------------------
 
-export function useMe(enabled = true) {
-  return useQuery({
-    queryKey: keys.me,
-    queryFn: () => unwrap(api.GET("/v1/auth/me")),
-    retry: false,
-    staleTime: 60_000,
-    enabled,
-  });
-}
+/** The signed-in account with its plan limits and usage. */
+export type Account = MeOutputBody;
+
+/**
+ * The one query that says who is signed in. A lost session resolves to
+ * null rather than throwing: not being signed in is an answer.
+ */
+export const sessionQueryOptions = queryOptions({
+  queryKey: keys.me,
+  queryFn: async (): Promise<Account | null> => {
+    try {
+      return await unwrap(api.GET("/v1/auth/me"));
+    } catch (e) {
+      if (isApiError(e) && e.isSessionLost) return null;
+      throw e;
+    }
+  },
+  staleTime: 60_000,
+  retry: false,
+});
 
 export function useAuthMutations() {
   const qc = useQueryClient();
@@ -51,10 +63,6 @@ export function useAuthMutations() {
     register: useMutation({
       mutationFn: (body: Body<"/v1/auth/register", "post">) => unwrap(api.POST("/v1/auth/register", { body })),
       onSuccess: reset,
-    }),
-    logout: useMutation({
-      mutationFn: () => unwrap(api.POST("/v1/auth/logout")),
-      onSuccess: () => qc.clear(),
     }),
     verifyEmail: useMutation({
       mutationFn: (body: Body<"/v1/auth/verify-email", "post">) => unwrap(api.POST("/v1/auth/verify-email", { body })),
@@ -72,10 +80,31 @@ export function useAuthMutations() {
     }),
     changePassword: useMutation({
       mutationFn: (body: Body<"/v1/auth/password", "post">) => unwrap(api.POST("/v1/auth/password", { body })),
+      // Every other session is signed out by the change.
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.sessions }),
     }),
     updateProfile: useMutation({
       mutationFn: (body: Body<"/v1/auth/profile", "patch">) => unwrap(api.PATCH("/v1/auth/profile", { body })),
       onSuccess: reset,
+    }),
+  };
+}
+
+export function useSessions() {
+  return useQuery({ queryKey: keys.sessions, queryFn: () => unwrap(api.GET("/v1/auth/sessions")) });
+}
+
+export function useSessionMutations() {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: keys.sessions });
+  return {
+    revoke: useMutation({
+      mutationFn: (id: string) => unwrap(api.DELETE("/v1/auth/sessions/{id}", { params: { path: { id } } })),
+      onSuccess: refresh,
+    }),
+    revokeOthers: useMutation({
+      mutationFn: () => unwrap(api.POST("/v1/auth/sessions/revoke-others")),
+      onSuccess: refresh,
     }),
   };
 }

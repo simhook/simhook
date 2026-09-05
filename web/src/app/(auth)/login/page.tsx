@@ -2,7 +2,6 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,16 +18,14 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
   const { login } = useAuthMutations();
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
-  const next = params.get("next");
-  const target = next && next.startsWith("/") ? next : "/dashboard";
+  // Once the API has signed us in, the layout's redirect moves on as soon as
+  // the account arrives; the form stays busy until then.
+  const busy = login.isPending || login.isSuccess;
 
   const onSubmit = form.handleSubmit((values) =>
     login.mutate(values, {
-      onSuccess: () => router.replace(target),
       onError: (e) => {
         if (isApiError(e)) {
           const fields = e.fieldMessages();
@@ -53,8 +50,8 @@ function LoginForm() {
       {login.isError && !Object.keys(form.formState.errors).length ? (
         <p className="text-sm text-destructive">{errorMessage(login.error)}</p>
       ) : null}
-      <Button type="submit" disabled={login.isPending}>
-        {login.isPending ? "Signing in…" : "Sign in"}
+      <Button type="submit" disabled={busy}>
+        {busy ? "Signing in…" : "Sign in"}
       </Button>
       <div className="flex justify-between text-sm text-muted-foreground">
         <Link href="/reset-password" className="hover:text-foreground">

@@ -1,15 +1,24 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SessionProvider } from "@/components/session-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { isApiError } from "@/lib/api";
+import { keys } from "@/lib/queries";
 
 let browserQueryClient: QueryClient | undefined;
 
 function makeQueryClient() {
-  return new QueryClient({
+  // Any request that finds the session gone tells the account query so, and
+  // nothing else: the shell reacts to that one value.
+  const sessionLost = (error: unknown) => {
+    if (isApiError(error) && error.isSessionLost) client.setQueryData(keys.me, null);
+  };
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({ onError: sessionLost }),
+    mutationCache: new MutationCache({ onError: sessionLost }),
     defaultOptions: {
       queries: {
         staleTime: 10_000,
@@ -19,6 +28,7 @@ function makeQueryClient() {
       },
     },
   });
+  return client;
 }
 
 function getQueryClient() {
@@ -30,8 +40,10 @@ function getQueryClient() {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={getQueryClient()}>
-      <TooltipProvider delay={300}>{children}</TooltipProvider>
-      <Toaster position="bottom-right" richColors closeButton />
+      <SessionProvider>
+        <TooltipProvider delay={300}>{children}</TooltipProvider>
+      </SessionProvider>
+      <Toaster position="bottom-right" closeButton />
     </QueryClientProvider>
   );
 }
