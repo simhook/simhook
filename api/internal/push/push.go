@@ -58,7 +58,7 @@ func NewFCM(ctx context.Context, credentialsFile string) (Sender, error) {
 	if _, err := os.ReadFile(credentialsFile); err != nil {
 		return nil, fmt.Errorf("push: credentials file: %w", err)
 	}
-	app, err := firebase.NewApp(ctx, nil, option.WithCredentialsFile(credentialsFile))
+	app, err := firebase.NewApp(ctx, nil, option.WithAuthCredentialsFile(option.ServiceAccount, credentialsFile))
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +83,9 @@ func (s *fcmSender) Send(ctx context.Context, msgs []Message) ([]Result, error) 
 			}
 			ttl := m.TTL
 			out = append(out, &messaging.Message{
+				// The phone registers with an FCM registration token, which is what
+				// the server holds; an installation id is a different thing.
+				//lint:ignore SA1019 registration tokens are still the delivery address
 				Token: m.Token,
 				Data:  m.Data,
 				Android: &messaging.AndroidConfig{

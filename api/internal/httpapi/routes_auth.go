@@ -16,9 +16,6 @@ import (
 // Shapes
 // ---------------------------------------------------------------------------
 
-// turnstileDoc explains the bot-check token where a form accepts one.
-const turnstileDoc = "Cloudflare Turnstile token. Required when GET /v1/auth/config reports a turnstile_site_key."
-
 type registerInput struct {
 	Body struct {
 		Email          string `json:"email" format:"email" maxLength:"254" doc:"Sign-in email. A verification code is sent to it."`

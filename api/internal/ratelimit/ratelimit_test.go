@@ -9,8 +9,10 @@ import (
 
 func TestKeyed(t *testing.T) {
 	k := NewKeyed(rate.Every(time.Hour), 2)
-	if !k.Allow("a") || !k.Allow("a") {
-		t.Fatal("the burst should pass")
+	for i := 0; i < 2; i++ {
+		if !k.Allow("a") {
+			t.Fatal("the burst should pass")
+		}
 	}
 	if k.Allow("a") {
 		t.Fatal("the third call within the hour should be refused")

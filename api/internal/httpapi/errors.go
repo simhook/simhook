@@ -133,7 +133,7 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 	case errors.Is(err, auth.ErrNoPassword):
 		return apiErr(http.StatusBadRequest, "no_password", err.Error())
 	case errors.Is(err, auth.ErrGoogleEmailUnverified):
-		return apiErr(http.StatusBadRequest, "google_email_unverified", err.Error())
+		return apiErr(http.StatusBadRequest, "google_email_unverified", "Google has not verified this email address. Sign in with your password instead.")
 	case errors.Is(err, turnstile.ErrFailed):
 		return apiErr(http.StatusBadRequest, "turnstile_failed", "The bot check did not pass. Reload the page and try again.")
 	case errors.Is(err, gateway.ErrInvalidPairingCode):

@@ -15,7 +15,7 @@ import (
 
 // ErrGoogleEmailUnverified is returned when Google vouches for an identity
 // but not for its email address, and that address belongs to an account.
-var ErrGoogleEmailUnverified = errors.New("Google has not verified this email address; sign in with your password instead")
+var ErrGoogleEmailUnverified = errors.New("google has not verified this email address")
 
 // GoogleIdentity is what Google says about the person who just signed in.
 type GoogleIdentity struct {
