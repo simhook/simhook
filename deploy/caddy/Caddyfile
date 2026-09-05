@@ -1,0 +1,36 @@
+# Values in {$...} come from the environment set in docker-compose.prod.yaml.
+{
+	email {$ACME_EMAIL}
+	servers {
+		# Cloudflare sits in front of us; trust its ranges so X-Forwarded-For
+		# carries the visitor's address.
+		trusted_proxies cloudflare {
+			interval 12h
+			timeout 15s
+		}
+	}
+}
+
+(cloudflare_tls) {
+	tls {
+		dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	}
+}
+
+{$API_DOMAIN} {
+	import cloudflare_tls
+	encode zstd gzip
+	reverse_proxy api:8080
+}
+
+{$APP_DOMAIN} {
+	import cloudflare_tls
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+# The bare domain will carry the landing page. Until then it sends people to the app.
+{$ROOT_DOMAIN}, www.{$ROOT_DOMAIN} {
+	import cloudflare_tls
+	redir https://{$APP_DOMAIN}{uri} temporary
+}

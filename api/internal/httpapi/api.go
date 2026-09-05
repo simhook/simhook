@@ -65,7 +65,10 @@ func New(deps Deps) *Server {
 		deps.Log = slog.Default()
 	}
 	router := chi.NewRouter()
-	router.Use(middleware.RealIP)
+	if deps.Config.TrustProxy {
+		// Only behind a proxy that rewrites X-Forwarded-For, such as Caddy in deploy/.
+		router.Use(middleware.RealIP)
+	}
 	router.Use(middleware.RequestID)
 	router.Use(recoverer(deps.Log))
 	router.Use(requestLogger(deps.Log))

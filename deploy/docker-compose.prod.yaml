@@ -1,0 +1,108 @@
+# Production stack on one host: Postgres, the API, the dashboard, Caddy for
+# TLS and routing, and a nightly database dump.
+#
+#   cp .env.example .env && cp api.env.example api.env   # then fill both in
+#   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
+#   docker compose -f docker-compose.prod.yaml up -d --build
+#
+# See README.md in this directory for the full runbook.
+name: simhook
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simhook
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: simhook
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simhook -d simhook"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/simhook/api:latest}
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    env_file: api.env
+    environment:
+      SIMHOOK_ENV: production
+      SIMHOOK_HTTP_ADDR: ":8080"
+      SIMHOOK_PUBLIC_URL: https://${API_DOMAIN:?set API_DOMAIN in .env}
+      SIMHOOK_WEB_URL: https://${APP_DOMAIN:?set APP_DOMAIN in .env}
+      SIMHOOK_DATABASE_URL: postgres://simhook:${POSTGRES_PASSWORD}@postgres:5432/simhook?sslmode=disable
+      SIMHOOK_FCM_CREDENTIALS_FILE: /secrets/fcm.json
+      SIMHOOK_TRUST_PROXY: "true"
+    volumes:
+      - ./secrets/fcm.json:/secrets/fcm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/simhook/web:latest}
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    build: ./caddy
+    image: simhook/caddy:local
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+      APP_DOMAIN: ${APP_DOMAIN}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?set ROOT_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN in .env}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  # Dumps the database once a day into ./backups and prunes old dumps.
+  # Copy that directory off the host; a backup on the same disk is not a backup.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          pg_dump -h postgres -U simhook -d simhook -Fc -f "/backups/simhook-$$(date +%F-%H%M).dump" \
+            && echo "backup written" \
+            || echo "backup failed"
+          find /backups -name 'simhook-*.dump' -mtime +$${BACKUP_KEEP_DAYS} -delete
+          sleep 86400
+        done
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

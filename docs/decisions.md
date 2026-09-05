@@ -119,3 +119,12 @@ Batch counters are incremented atomically on each transition, never recomputed b
 **Why:** Android 17 withholds any incoming SMS that looks like a one-time code from apps targeting API 37 or higher for three hours: the received-SMS broadcast is not delivered and SMS provider queries are filtered, unless the app holds the default SMS role or a similar system role. Verified on the Android 17 emulator: at target 37 a text reading "your code is 8888" never reached the app; at target 36 it was forwarded within a second. Relaying verification codes is a core use of the product, and the app ships as a direct APK download, so no store deadline forces the target up.
 
 Texts in the WebOTP or SMS Retriever formats (`@domain #code`) are delayed the same way on Android 16 QPR2 and newer regardless of target. That format is rare outside app-specific flows and is documented as a limitation. The way out is an optional mode in which the app takes the default SMS role; that is a later phase.
+
+## 010. Deployment: one host, containers, Cloudflare in front
+
+**Date:** 2026-09-05
+**Decision:** Production runs on a single VPS with Docker Compose: Postgres, the API, the dashboard, Caddy, and a nightly dump. Cloudflare proxies the domain. Caddy obtains certificates through Cloudflare's DNS API, so the proxy stays on and the origin never needs to answer HTTP challenges. CI builds and publishes the images to GitHub's registry; the compose file can also build them on the host, which keeps self-hosting identical to production.
+
+**Why:** The workload is small. The phones do the heavy lifting; the server routes pushes and stores rows. One host with off-site backups is cheaper and easier to reason about than managed services, and nothing in the design prevents splitting it later.
+
+Behind the proxy the API trusts forwarded client addresses only when `SIMHOOK_TRUST_PROXY` is set, so a directly exposed instance cannot be fooled about who is calling.

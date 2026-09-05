@@ -48,4 +48,8 @@ pnpm contracts  # regenerate TypeScript types after changing the API
 - JavaScript/TypeScript: `npm install @simhook/sdk`. See `packages/sdk/README.md`.
 - AI agents: `npx -y @simhook/mcp` with `SIMHOOK_API_KEY` set. See `packages/mcp/README.md`.
 
+## Deploying
+
+One host, Docker Compose, Cloudflare in front. The runbook is `deploy/README.md`; the same files work for self-hosting. CI builds container images for the API and dashboard on every push to main.
+
 See `docs/decisions.md` for the why behind the stack.

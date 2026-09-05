@@ -1,0 +1,17 @@
+# Context for web/Dockerfile is the repository root. Keep it small.
+.git
+.github
+.claude
+android
+api
+deploy
+docs
+**/node_modules
+**/.next
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/google-services.json
+**/firebase-*.json
+**/*.md
