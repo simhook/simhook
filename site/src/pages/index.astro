@@ -2,7 +2,7 @@
 import Base from "../layouts/Base.astro";
 ---
 
-<Base title="simhook: your phone is the SMS API">
+<Base title="simhook">
   <h1>simhook turns an Android phone into an SMS API.</h1>
   <p class="lead">Pair a phone with a SIM in it. Every message you send from code goes out through that SIM, and every text the phone receives comes back to you as a webhook. Your numbers, your carrier plan, no per-message fees.</p>
   <p>It is a Go API you can self-host, an Android app that stays out of the way, a dashboard, a TypeScript SDK, and an MCP server so an agent can text people too.</p>
@@ -13,7 +13,7 @@ import Base from "../layouts/Base.astro";
   </div>
 
   <section>
-    <h2>Send one</h2>
+    <h2>send one</h2>
     <pre><code><span class="c"># any HTTP client, or the SDK, or an agent over MCP</span>
 curl https://api.simhook.dev/v1/messages \
   -H "X-Api-Key: sh_live_..." \
@@ -28,7 +28,7 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
   </section>
 
   <section>
-    <h2>What you get</h2>
+    <h2>what you get</h2>
     <ul class="plain">
       <li><b>Send and receive</b><span>Through your own SIM. Dual SIM works; pick one per message.</span></li>
       <li><b>Delivery receipts</b><span>Sent and delivered from the carrier, not guessed.</span></li>
@@ -40,7 +40,7 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
   </section>
 
   <section>
-    <h2>What it looks like</h2>
+    <h2>what it looks like</h2>
     <div class="shots">
       <div class="shot">
         <div class="mini">
@@ -61,7 +61,7 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
   </section>
 
   <section>
-    <h2>Pricing</h2>
+    <h2>pricing</h2>
     <table>
       <thead><tr><th>Plan</th><th>Includes</th><th>Price</th></tr></thead>
       <tbody>
@@ -74,7 +74,7 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
   </section>
 
   <section>
-    <h2>Questions</h2>
+    <h2>questions</h2>
     <dl class="qa">
       <dt>Will my carrier mind?</dt>
       <dd>Consumer plans are for people, not bulk. The app paces sends with a delay you set, and the dashboard shows what went out. Keep it to what your plan allows and to people who want your messages; for real volume use a business SIM.</dd>

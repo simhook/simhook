@@ -6,13 +6,14 @@ import "../styles/global.css";
 interface Props {
   title: string;
   description?: string;
-  wide?: boolean;
+  /** Reading width of the content inside the shell. The bar and footer never change. */
+  measure?: "prose" | "doc" | "form";
 }
 
 const {
   title,
   description = "Turn an Android phone into an SMS API. Send and receive texts from your code through your own SIM, with webhooks, an SDK, and an MCP server.",
-  wide = false,
+  measure = "prose",
 } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
@@ -40,13 +41,13 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <meta name="theme-color" content="#ffffff" />
   </head>
   <body>
-    <div class:list={["page", { wide }]}>
+    <div class="page">
       <nav class="top" aria-label="Main">
         <a class="wm" href="/">simhook</a>
         {nav.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
         <span class="right"><a href="https://app.simhook.dev/login">Sign in</a></span>
       </nav>
-      <main>
+      <main class:list={[`measure-${measure}`]}>
         <slot />
       </main>
       <footer class="bottom">

@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
         )}
       >
         <div>
-          <h1 className="text-xl font-semibold">Reset your password</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Reset your password</h1>
           <p className="text-sm text-muted-foreground">We email a code if the address has an account.</p>
         </div>
         <Field label="Email" htmlFor="email" error={requestForm.formState.errors.email?.message}>
@@ -79,7 +79,7 @@ export default function ResetPasswordPage() {
       )}
     >
       <div>
-        <h1 className="text-xl font-semibold">Enter the code</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Enter the code</h1>
         <p className="text-sm text-muted-foreground">Check {email} for a 6-digit code. It expires in 30 minutes.</p>
       </div>
       <Field label="Code" htmlFor="code" error={resetForm.formState.errors.code?.message}>

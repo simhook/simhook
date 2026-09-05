@@ -3,9 +3,9 @@
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { API_DOCS_URL, isApiError } from "@/lib/api";
+import { Bar, Footer, Shell, SITE_URL } from "@/components/site-chrome";
+import { isApiError } from "@/lib/api";
 import { useAuthMutations, useMe } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Overview" },
@@ -16,49 +16,34 @@ const nav = [
   { href: "/settings", label: "Settings" },
 ] as const;
 
-function TopNav() {
+function AppBar() {
   const pathname = usePathname();
   const me = useMe();
   const { logout } = useAuthMutations();
   const router = useRouter();
   const email = me.data?.user.email ?? "";
   return (
-    <nav className="flex flex-wrap items-baseline gap-x-5 gap-y-2 border-b py-4 text-sm" aria-label="Main">
-      <Link href="/dashboard" className="mr-1 font-mono text-[15px] font-medium">
-        simhook
-      </Link>
-      {nav.map(({ href, label }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "transition-colors",
-              active ? "text-foreground underline underline-offset-[6px]" : "text-muted-foreground hover:text-foreground",
-            )}
+    <Bar
+      links={nav}
+      isActive={(href) => pathname === href || pathname.startsWith(href + "/")}
+      right={
+        <>
+          <span className="hidden max-w-[240px] truncate sm:inline" title={email}>
+            {email}
+          </span>
+          <a href={`${SITE_URL}/docs`} className="hover:text-foreground">
+            Docs
+          </a>
+          <button
+            type="button"
+            className="hover:text-foreground"
+            onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
           >
-            {label}
-          </Link>
-        );
-      })}
-      <span className="ml-auto flex items-center gap-4 text-muted-foreground">
-        <span className="hidden max-w-[240px] truncate sm:inline" title={email}>
-          {email}
-        </span>
-        <a href={API_DOCS_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">
-          Docs
-        </a>
-        <button
-          type="button"
-          className="hover:text-foreground"
-          onClick={() => logout.mutate(undefined, { onSuccess: () => router.replace("/login") })}
-        >
-          Sign out
-        </button>
-      </span>
-    </nav>
+            Sign out
+          </button>
+        </>
+      }
+    />
   );
 }
 
@@ -76,7 +61,7 @@ function VerifyBanner() {
   );
 }
 
-/** Signed-in frame: one column with a row of words at the top, and the auth gate. */
+/** Signed-in frame: the shared shell with the app's words in the bar, and the auth gate. */
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useMe();
   const router = useRouter();
@@ -90,30 +75,33 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (me.isPending || (me.isError && isApiError(me.error) && me.error.isUnauthenticated)) {
     return (
-      <div className="mx-auto w-full max-w-[960px] px-6 py-10 text-sm text-muted-foreground">Loading…</div>
+      <Shell>
+        <div className="py-10 text-sm text-muted-foreground">Loading…</div>
+      </Shell>
     );
   }
 
   if (me.isError) {
     return (
-      <div className="mx-auto w-full max-w-[960px] px-6 py-10 text-sm">
-        <p className="border-l-2 border-destructive pl-4">
+      <Shell>
+        <p className="mt-10 border-l-2 border-destructive pl-4 text-sm">
           <span className="font-medium text-destructive">The API is not reachable.</span> {me.error.message}{" "}
           <button className="underline" onClick={() => me.refetch()}>
             Try again
           </button>
         </p>
-      </div>
+      </Shell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-[960px] px-6 pb-16">
-      <TopNav />
-      <main>
+    <Shell>
+      <AppBar />
+      <main className="flex-1">
         <VerifyBanner />
         {children}
       </main>
-    </div>
+      <Footer />
+    </Shell>
   );
 }

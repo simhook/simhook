@@ -24,7 +24,7 @@ const pages = [
 ];
 ---
 
-<Base title={`${title} · simhook docs`} description={description} wide>
+<Base title={`${title} · simhook`} description={description} measure="doc">
   <nav class="docs-nav" aria-label="Documentation">
     {pages.map(([href, label]) => <a href={href} aria-current={path === href ? "page" : undefined}>{label}</a>)}
   </nav>

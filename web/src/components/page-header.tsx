@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-8 mt-10 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <div className="mb-8 mt-12 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div className="max-w-[62ch]">
-        <h1 className="text-[22px] font-semibold leading-tight tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-semibold leading-tight tracking-tight">{title}</h1>
         {description ? <p className="mt-1.5 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-4">{actions}</div> : null}

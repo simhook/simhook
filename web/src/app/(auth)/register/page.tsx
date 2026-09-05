@@ -40,7 +40,7 @@ export default function RegisterPage() {
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Create your account</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
         <p className="text-sm text-muted-foreground">Free to start. No card needed.</p>
       </div>
       <Field label="Name" htmlFor="name" error={form.formState.errors.name?.message}>

@@ -44,6 +44,10 @@
   --color-card: var(--card);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.6;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.6;
   --radius-sm: 0px;
   --radius-md: 0px;
   --radius-lg: 0px;

@@ -1,5 +1,7 @@
-/* simhook.dev: one column, black on white, a sans for words and a mono for
-   anything a machine wrote. Light only, on purpose. */
+/* simhook: one shell for every page, on the site and in the app. A 960 px
+   container holds the bar and the footer in the same place everywhere; the
+   text inside keeps a reading measure. Black on white, a sans for words and
+   a mono for anything a machine wrote. Light only, on purpose. */
 
 :root {
   --bg: #ffffff;
@@ -12,7 +14,8 @@
   --bad: #b91c1c;
   --sans: "Instrument Sans Variable", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
-  --col: 640px;
+  --col: 960px;
+  --measure: 640px;
   color-scheme: light;
 }
 
@@ -25,7 +28,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -41,30 +44,44 @@ a {
 a:hover { text-decoration-color: var(--fg); }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
-.page { max-width: var(--col); margin: 0 auto; padding: 0 24px 64px; }
-.page.wide { --col: 760px; }
+/* the shell */
+.page { max-width: var(--col); margin: 0 auto; padding: 0 24px; min-height: 100vh; display: flex; flex-direction: column; }
+main { display: block; max-width: var(--measure); flex: 1; }
+main.measure-doc { --measure: 760px; }
+main.measure-form { --measure: 400px; }
+main > section { margin-top: 56px; }
 
-/* top row */
 nav.top {
   display: flex;
   align-items: baseline;
-  gap: 22px;
-  padding: 22px 0 18px;
+  gap: 20px;
+  padding: 16px 0;
   font-size: 14px;
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 nav.top a { text-decoration: none; color: var(--muted); }
 nav.top a:hover, nav.top a[aria-current="page"] { color: var(--fg); }
-nav.top .wm { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--fg); margin-right: 6px; }
+nav.top .wm { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--fg); margin-right: 4px; }
 nav.top .right { margin-left: auto; display: flex; gap: 18px; }
 
-main { display: block; }
-main > section { margin-top: 56px; }
+footer.bottom {
+  margin-top: 72px;
+  padding: 18px 0 40px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+footer.bottom a { color: var(--muted); text-decoration: none; }
+footer.bottom a:hover { color: var(--fg); }
 
-h1 { font-size: 27px; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; margin: 56px 0 18px; text-wrap: balance; }
-h2 { font-size: 15.5px; font-weight: 600; margin: 0 0 14px; }
-h3 { font-size: 15.5px; font-weight: 500; margin: 24px 0 8px; }
+/* type */
+h1 { font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; margin: 48px 0 16px; text-wrap: balance; }
+h2 { font-family: var(--mono); font-size: 12px; font-weight: 400; letter-spacing: 0.02em; color: var(--muted); margin: 0 0 10px; }
+h3 { font-size: 15px; font-weight: 500; margin: 24px 0 8px; }
 p { margin: 0 0 16px; max-width: 62ch; }
 p.lead { font-size: 17px; }
 .muted { color: var(--muted); }
@@ -142,27 +159,13 @@ dl.qa dt:first-child { margin-top: 0; }
 .mini .stats b { display: block; font-size: 17px; font-weight: 500; }
 .mini .stats span { color: var(--muted); font-size: 10.5px; font-family: var(--mono); }
 
-/* footer */
-footer.bottom {
-  margin-top: 72px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--muted);
-}
-footer.bottom a { color: var(--muted); text-decoration: none; }
-footer.bottom a:hover { color: var(--fg); }
-
 /* docs */
 nav.docs-nav { display: flex; gap: 16px; flex-wrap: wrap; padding: 14px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); }
 nav.docs-nav a { text-decoration: none; color: var(--muted); }
 nav.docs-nav a:hover { color: var(--fg); }
 nav.docs-nav a[aria-current="page"] { color: var(--fg); text-decoration: underline; text-underline-offset: 6px; }
-article.doc h1 { margin-top: 40px; }
-article.doc h2 { font-size: 17px; margin: 44px 0 12px; }
+article.doc h1 { margin-top: 36px; }
+article.doc h2 { margin: 44px 0 10px; }
 article.doc h3 { margin-top: 28px; }
 article.doc p, article.doc li { max-width: 66ch; }
 article.doc ul, article.doc ol { padding-left: 22px; margin: 0 0 16px; }

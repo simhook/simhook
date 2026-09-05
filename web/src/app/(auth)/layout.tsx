@@ -1,14 +1,12 @@
-import Link from "next/link";
+import { Bar, Footer, PUBLIC_LINKS, Shell } from "@/components/site-chrome";
 
+/** Sign-in and friends are pages of the site: the same bar and footer, a form-width column inside. */
 export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="mx-auto w-full max-w-[400px] px-6 pb-16">
-      <div className="border-b py-4">
-        <Link href="https://simhook.dev" className="font-mono text-[15px] font-medium">
-          simhook
-        </Link>
-      </div>
-      <div className="pt-10">{children}</div>
-    </div>
+    <Shell>
+      <Bar links={PUBLIC_LINKS} right={<span className="text-foreground">Sign in</span>} />
+      <main className="w-full max-w-[400px] flex-1 pt-12">{children}</main>
+      <Footer />
+    </Shell>
   );
 }

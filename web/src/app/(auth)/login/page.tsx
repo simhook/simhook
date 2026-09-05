@@ -41,7 +41,7 @@ function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Sign in</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-sm text-muted-foreground">Welcome back.</p>
       </div>
       <Field label="Email" htmlFor="email" error={form.formState.errors.email?.message}>
