@@ -22,6 +22,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SIMHOOK_RELEASE_CERT_SHA256 = "275f52c9a68f1dfc2c1e679e82cbcc860213ac35b9a9f1ff180ecd16e37eaaf6";
+const FLAGS = ["publish", "skip-build", "force"];
+const VALUES = ["repo", "notes-file", "min-code", "apk-base-url", "cert-sha256"];
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const android = path.join(root, "android");
@@ -149,9 +151,6 @@ log(`latest manifest: https://github.com/${repo}/releases/latest/download/androi
 log(`latest APK:      https://github.com/${repo}/releases/latest/download/simhook.apk`);
 
 // ---------------------------------------------------------------------------
-
-const FLAGS = ["publish", "skip-build", "force"];
-const VALUES = ["repo", "notes-file", "min-code", "apk-base-url", "cert-sha256"];
 
 function parseArgs(argv) {
   const out = {};

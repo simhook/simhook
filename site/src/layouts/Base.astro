@@ -17,7 +17,7 @@ const {
 } = Astro.props;
 
 const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) || "https://app.simhook.dev";
-const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "") || "/";
+const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/index$/, "").replace(/\/$/, "") || "/";
 const here = new URL(path === "/" ? "/" : path, Astro.site);
 const nav = [
   ["/docs", "Docs"],
