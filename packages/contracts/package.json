@@ -1,0 +1,20 @@
+{
+  "name": "@simhook/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAPI document and generated TypeScript types for the simhook API.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./openapi.json": "./openapi.json"
+  },
+  "scripts": {
+    "generate": "openapi-typescript openapi.json -o src/api.d.ts --alphabetize && node scripts/aliases.mjs"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.9.0",
+    "typescript": "^5.9.0"
+  }
+}

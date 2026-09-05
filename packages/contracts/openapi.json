@@ -1,0 +1,4007 @@
+{
+  "components": {
+    "schemas": {
+      "APIError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code.",
+            "type": "string"
+          },
+          "errors": {
+            "description": "Per-field problems, when applicable.",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "type": "array"
+          },
+          "message": {
+            "description": "Human-readable explanation.",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status code.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "APIKey": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "use_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "expires_at",
+          "last_used_at",
+          "use_count",
+          "revoked_at",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "Batch": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivered_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "dispatched_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimated_completion_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "recipient_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "recipient_preview": {
+            "type": "string"
+          },
+          "scheduled_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sent_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "unknown_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "body",
+          "recipient_count",
+          "recipient_preview",
+          "dispatched_count",
+          "sent_count",
+          "delivered_count",
+          "failed_count",
+          "unknown_count",
+          "status",
+          "scheduled_at",
+          "estimated_completion_at",
+          "completed_at",
+          "error",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "BatchOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/Batch"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch",
+          "messages"
+        ],
+        "type": "object"
+      },
+      "BatchesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Batch"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "current_password": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 200,
+            "minLength": 10,
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "type": "object"
+      },
+      "CreateKeyInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_at": {
+            "description": "Optional expiry.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "Label shown in the dashboard.",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Any of send, read, devices, webhooks. Defaults to all.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CreateKeyOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "$ref": "#/components/schemas/APIKey"
+          },
+          "key": {
+            "description": "The full key. It is shown once and never stored.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "api_key"
+        ],
+        "type": "object"
+      },
+      "CreateWebhookInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "description": "Any of message.received, message.sent, message.delivered, message.failed, message.unknown, device.online, device.offline.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "url": {
+            "description": "HTTPS endpoint that receives POSTs.",
+            "format": "uri",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "events"
+        ],
+        "type": "object"
+      },
+      "DeliveriesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Delivery"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Delivery": {
+        "additionalProperties": false,
+        "properties": {
+          "abandoned_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempt_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event": {
+            "type": "string"
+          },
+          "http_status": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payload": {},
+          "response_excerpt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "webhook_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "webhook_id",
+          "message_id",
+          "device_id",
+          "event",
+          "payload",
+          "url",
+          "status",
+          "attempt_count",
+          "next_attempt_at",
+          "last_attempt_at",
+          "delivered_at",
+          "abandoned_at",
+          "http_status",
+          "response_excerpt",
+          "error",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "DeliveryOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery": {
+            "$ref": "#/components/schemas/Delivery"
+          }
+        },
+        "required": [
+          "delivery"
+        ],
+        "type": "object"
+      },
+      "Device": {
+        "additionalProperties": false,
+        "properties": {
+          "app_version_code": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "app_version_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "heartbeat_interval_minutes": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "last_heartbeat_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manufacturer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "os_api_level": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "os_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preferred_sim_subscription_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "push_token_invalid_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "push_token_invalidated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receive_enabled": {
+            "type": "boolean"
+          },
+          "received_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "send_delay_seconds": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sent_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sims": {},
+          "telemetry": {},
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "is_default",
+          "manufacturer",
+          "brand",
+          "model",
+          "os_version",
+          "os_api_level",
+          "app_version_name",
+          "app_version_code",
+          "push_token_invalidated_at",
+          "push_token_invalid_reason",
+          "receive_enabled",
+          "send_delay_seconds",
+          "heartbeat_interval_minutes",
+          "preferred_sim_subscription_id",
+          "last_heartbeat_at",
+          "online",
+          "telemetry",
+          "sims",
+          "sent_count",
+          "received_count",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "DeviceOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "type": "object"
+      },
+      "DevicePatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_preferred_sim": {
+            "description": "Set true to fall back to the phone's default SIM.",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "A disabled phone receives no sends.",
+            "type": "boolean"
+          },
+          "heartbeat_interval_minutes": {
+            "format": "int32",
+            "maximum": 1440,
+            "minimum": 15,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "preferred_sim_subscription_id": {
+            "description": "SIM to send from when a send names none.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "receive_enabled": {
+            "description": "Forward incoming SMS from this phone.",
+            "type": "boolean"
+          },
+          "send_delay_seconds": {
+            "description": "Pause between consecutive sends on the phone.",
+            "format": "int32",
+            "maximum": 3600,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevicesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "FieldError": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "description": "Location of the problem, for example body.to[0].",
+            "type": "string"
+          },
+          "message": {
+            "description": "What is wrong with it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "HeartbeatInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "app_version_code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "app_version_name": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "os_api_level": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "os_version": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "push_token": {
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "sims": {
+            "description": "Array of SIM descriptors with subscription_id, carrier, slot, country."
+          },
+          "telemetry": {
+            "description": "Battery, network, storage, uptime, timezone, locale. Free-form object."
+          }
+        },
+        "type": "object"
+      },
+      "InboundInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "Hash of sender, body, and timestamp computed on the phone. Repeats are ignored.",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sender": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "sim_subscription_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sender",
+          "body",
+          "received_at"
+        ],
+        "type": "object"
+      },
+      "InboundOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "inserted": {
+            "description": "False when this message was already stored.",
+            "type": "boolean"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          }
+        },
+        "required": [
+          "message",
+          "inserted"
+        ],
+        "type": "object"
+      },
+      "Limits": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "daily_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "device_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "monthly_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "plan_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "daily_limit",
+          "monthly_limit",
+          "batch_limit",
+          "device_limit"
+        ],
+        "type": "object"
+      },
+      "ListKeysOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/APIKey"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "LoginInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "MeOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageView"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user",
+          "limits",
+          "usage"
+        ],
+        "type": "object"
+      },
+      "Message": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "dispatched_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failed_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recipient": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sender": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sent_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sim_subscription_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "batch_id",
+          "direction",
+          "status",
+          "body",
+          "recipient",
+          "sim_subscription_id",
+          "dispatched_at",
+          "sent_at",
+          "delivered_at",
+          "failed_at",
+          "error_code",
+          "error_message",
+          "sender",
+          "received_at",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "MessageOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "MessagesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "description": "Pass as cursor to get the next page. Absent on the last page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "PairInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "app_version_code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "app_version_name": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "brand": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "build_id": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "code": {
+            "description": "Pairing code from the dashboard.",
+            "maxLength": 9,
+            "minLength": 8,
+            "type": "string"
+          },
+          "hardware_key": {
+            "description": "Stable hash the app derives from the handset, so re-pairing finds the same device.",
+            "maxLength": 128,
+            "minLength": 8,
+            "type": "string"
+          },
+          "manufacturer": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "os_api_level": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "os_version": {
+            "maxLength": 32,
+            "type": "string"
+          },
+          "push_token": {
+            "maxLength": 4096,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "hardware_key"
+        ],
+        "type": "object"
+      },
+      "PairOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "device_token": {
+            "description": "Bearer token for /v1/device endpoints. Shown once.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device",
+          "device_token"
+        ],
+        "type": "object"
+      },
+      "PairingCodeOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Type this into the app, or scan pair_url as a QR code.",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pair_url": {
+            "description": "Deep link the app understands. Encode it as a QR code.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at",
+          "pair_url"
+        ],
+        "type": "object"
+      },
+      "Plan": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "batch_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "daily_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "device_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "monthly_limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "monthly_price_cents": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "yearly_price_cents": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "daily_limit",
+          "monthly_limit",
+          "batch_limit",
+          "device_limit",
+          "monthly_price_cents",
+          "yearly_price_cents",
+          "active"
+        ],
+        "type": "object"
+      },
+      "PlansOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "ProfileInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PushTokenInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
+      "RegisterInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Sign-in email. A verification code is sent to it.",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "password": {
+            "description": "At least 10 characters.",
+            "maxLength": 200,
+            "minLength": 10,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "RenameKeyInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ResetInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 6,
+            "minLength": 6,
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 200,
+            "minLength": 10,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "new_password"
+        ],
+        "type": "object"
+      },
+      "ResetRequestInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "SecretOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "type": "object"
+      },
+      "SendInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "Message text. Long texts are sent as concatenated SMS.",
+            "maxLength": 1600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "device_id": {
+            "description": "Phone to send from. Defaults to the account's default device, else the most recently online one.",
+            "type": "string"
+          },
+          "scheduled_at": {
+            "description": "Send later, up to 7 days ahead.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "sim_subscription_id": {
+            "description": "SIM to use on a multi-SIM phone. Unknown ids fall back to the phone's preferred SIM.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "to": {
+            "description": "Recipient phone numbers, ideally E.164 such as +14155550123.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "to",
+          "body"
+        ],
+        "type": "object"
+      },
+      "SendOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/Batch"
+          },
+          "message_ids": {
+            "description": "One id per recipient, in the order given after de-duplication.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch",
+          "message_ids"
+        ],
+        "type": "object"
+      },
+      "SessionOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
+      "Stats": {
+        "additionalProperties": false,
+        "properties": {
+          "devices": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "received": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sent": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sent",
+          "received",
+          "devices"
+        ],
+        "type": "object"
+      },
+      "StatusReportInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it happened on the phone. Defaults to now.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "error_code": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "error_message": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "sent",
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "UpdateWebhookInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "description": "Re-enabling clears any automatic pause.",
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "url": {
+            "format": "uri",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UsageView": {
+        "additionalProperties": false,
+        "properties": {
+          "received_this_month": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "received_today": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sent_this_month": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sent_today": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sent_today",
+          "sent_this_month",
+          "received_today",
+          "received_this_month"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "additionalProperties": false,
+        "properties": {
+          "avatar_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deletion_requested_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "email_verified_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_login_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "onboarding": {},
+          "role": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "avatar_url",
+          "role",
+          "email_verified_at",
+          "deletion_requested_at",
+          "onboarding",
+          "last_login_at",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "UserOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
+      "VerifyEmailInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The 6-digit code from the email.",
+            "maxLength": 6,
+            "minLength": 6,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "Webhook": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "disabled_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "failure_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_failure_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_success_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "success_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url",
+          "events",
+          "enabled",
+          "success_count",
+          "failure_count",
+          "last_attempt_at",
+          "last_success_at",
+          "last_failure_at",
+          "disabled_reason",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "WebhookCreatedOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "description": "Signing secret, shown once. Verify X-Simhook-Signature with it.",
+            "type": "string"
+          },
+          "webhook": {
+            "$ref": "#/components/schemas/Webhook"
+          }
+        },
+        "required": [
+          "webhook",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "WebhookOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "webhook": {
+            "$ref": "#/components/schemas/Webhook"
+          }
+        },
+        "required": [
+          "webhook"
+        ],
+        "type": "object"
+      },
+      "WebhooksOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Webhook"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "description": "Developer API key from the dashboard.",
+        "in": "header",
+        "name": "X-Api-Key",
+        "type": "apiKey"
+      },
+      "deviceToken": {
+        "description": "Device token issued at pairing. Only valid on /v1/device endpoints.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "session": {
+        "description": "Dashboard session cookie.",
+        "in": "cookie",
+        "name": "simhook_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Send and receive SMS through your own Android phone. Authenticate with an API key in the X-Api-Key header.",
+    "title": "simhook API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/api-keys": {
+      "get": {
+        "operationId": "list-api-keys",
+        "parameters": [
+          {
+            "description": "Also return revoked keys.",
+            "explode": false,
+            "in": "query",
+            "name": "include_revoked",
+            "schema": {
+              "description": "Also return revoked keys.",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListKeysOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List API keys",
+        "tags": [
+          "api-keys"
+        ]
+      },
+      "post": {
+        "description": "The full key is returned once. Only its hash is stored.",
+        "operationId": "create-api-key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKeyInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateKeyOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create an API key",
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/api-keys/{id}": {
+      "delete": {
+        "operationId": "delete-api-key",
+        "parameters": [
+          {
+            "description": "API key id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "API key id.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Delete an API key",
+        "tags": [
+          "api-keys"
+        ]
+      },
+      "patch": {
+        "operationId": "rename-api-key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameKeyInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Rename an API key",
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/api-keys/{id}/revoke": {
+      "post": {
+        "description": "Stops the key working immediately while keeping its record.",
+        "operationId": "revoke-api-key",
+        "parameters": [
+          {
+            "description": "API key id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "API key id.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revoke an API key",
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "description": "Checks the password and sets the session cookie used by the dashboard.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOutputBody"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Sign out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "description": "The account behind the credentials, with its plan limits and usage this period.",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Current account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password": {
+      "post": {
+        "operationId": "change-password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Change password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password-reset": {
+      "post": {
+        "description": "Completes a reset. Every existing session is signed out.",
+        "operationId": "reset-password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set a new password with a reset code",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/password-reset/request": {
+      "post": {
+        "description": "Emails a code if the address has an account. The response is the same either way.",
+        "operationId": "request-password-reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequestInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Request a password reset code",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/profile": {
+      "patch": {
+        "operationId": "update-profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update profile",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "description": "Creates the account, signs it in with a session cookie, and emails a verification code. Sending is blocked until the email is verified.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOutputBody"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create an account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/verify-email": {
+      "post": {
+        "operationId": "verify-email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Verify the email address",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/verify-email/send": {
+      "post": {
+        "operationId": "send-verification",
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Resend the verification code",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/batches": {
+      "get": {
+        "description": "Every send on the account, newest first, with per-status counts.",
+        "operationId": "list-batches",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List sends",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/v1/batches/{id}": {
+      "get": {
+        "description": "The batch plus one message per recipient. Poll this to follow a send.",
+        "operationId": "get-batch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Get a send",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/v1/device": {
+      "delete": {
+        "description": "Removes this phone from the account and revokes its token. Message history is kept.",
+        "operationId": "device-unpair",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Unpair this phone",
+        "tags": [
+          "device"
+        ]
+      },
+      "get": {
+        "operationId": "device-self",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "This phone's record",
+        "tags": [
+          "device"
+        ]
+      },
+      "patch": {
+        "operationId": "device-update-self",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Change this phone's settings",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/heartbeat": {
+      "post": {
+        "description": "Reports the phone is alive and uploads its state. The response carries the settings the phone should apply.",
+        "operationId": "device-heartbeat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Check in",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/inbound": {
+      "post": {
+        "description": "Stores an incoming message and fans out message.received. Returns 201 when stored, 200 when it was already known.",
+        "operationId": "device-report-inbound",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboundInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Report a received SMS",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/messages": {
+      "get": {
+        "operationId": "device-messages",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "direction",
+            "schema": {
+              "enum": [
+                "outbound",
+                "inbound"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "This phone's messages",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/messages/{id}/status": {
+      "post": {
+        "description": "Idempotent. Out-of-order reports never move a message backwards.",
+        "operationId": "device-report-status",
+        "parameters": [
+          {
+            "description": "Message id from the push payload.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Message id from the push payload.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusReportInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Report a send outcome",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/pair": {
+      "post": {
+        "description": "Exchanges a pairing code for a device record and a device token. Called by the phone app.",
+        "operationId": "pair-device",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Pair a phone",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/device/push-token": {
+      "post": {
+        "operationId": "device-push-token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushTokenInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ],
+        "summary": "Register a new push token",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/devices": {
+      "get": {
+        "description": "Every phone paired with the account, default first.",
+        "operationId": "list-devices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List devices",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/devices/pairing-codes": {
+      "post": {
+        "description": "Mints a code valid for 10 minutes. Enter it in the phone app, or show pair_url as a QR code for the app to scan.",
+        "operationId": "create-pairing-code",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingCodeOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create a pairing code",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/devices/{id}": {
+      "delete": {
+        "description": "Revokes the phone's token and stops sends to it. Message history is kept.",
+        "operationId": "unpair-device",
+        "parameters": [
+          {
+            "description": "Device id from GET /v1/devices.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Device id from GET /v1/devices.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Unpair a device",
+        "tags": [
+          "devices"
+        ]
+      },
+      "get": {
+        "operationId": "get-device",
+        "parameters": [
+          {
+            "description": "Device id from GET /v1/devices.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Device id from GET /v1/devices.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Get a device",
+        "tags": [
+          "devices"
+        ]
+      },
+      "patch": {
+        "description": "Only the fields you send change. The phone picks the new settings up on its next check-in.",
+        "operationId": "update-device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update device settings",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/devices/{id}/default": {
+      "post": {
+        "description": "Sends that omit device_id go out from the default device.",
+        "operationId": "set-default-device",
+        "parameters": [
+          {
+            "description": "Device id from GET /v1/devices.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Device id from GET /v1/devices.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Make this the default device",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/v1/messages": {
+      "get": {
+        "description": "Sent and received messages across the account, newest first, with delivery state on each. To poll for new messages, request order=asc with a from bound and follow next_cursor.",
+        "operationId": "list-messages",
+        "parameters": [
+          {
+            "description": "Comma-separated device ids. Default: all paired devices.",
+            "explode": false,
+            "in": "query",
+            "name": "device_ids",
+            "schema": {
+              "description": "Comma-separated device ids. Default: all paired devices.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by direction.",
+            "explode": false,
+            "in": "query",
+            "name": "direction",
+            "schema": {
+              "description": "Filter by direction.",
+              "enum": [
+                "outbound",
+                "inbound"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "queued",
+                "dispatched",
+                "sent",
+                "delivered",
+                "failed",
+                "unknown",
+                "received"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only messages from one send.",
+            "explode": false,
+            "in": "query",
+            "name": "batch_id",
+            "schema": {
+              "description": "Only messages from one send.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Match against text, recipient, and sender.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "description": "Match against text, recipient, and sender.",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive lower bound on created_at, RFC 3339.",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "Inclusive lower bound on created_at, RFC 3339.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exclusive upper bound on created_at, RFC 3339.",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "Exclusive upper bound on created_at, RFC 3339.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "desc (default) for newest first; asc to walk forward when polling.",
+            "explode": false,
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "description": "desc (default) for newest first; asc to walk forward when polling.",
+              "enum": [
+                "desc",
+                "asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "next_cursor from a previous page.",
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "next_cursor from a previous page.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size, default 50.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Page size, default 50.",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List messages",
+        "tags": [
+          "messages"
+        ]
+      },
+      "post": {
+        "description": "Queues one text to one or more recipients from a phone on the account. Acceptance is not delivery: follow the batch or subscribe to webhooks for the outcome. Every recipient counts as one message against the plan.",
+        "operationId": "send-message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Send an SMS",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/v1/messages/{id}": {
+      "get": {
+        "operationId": "get-message",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Get a message",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/v1/plans": {
+      "get": {
+        "description": "The public plan catalogue with limits and prices. No credentials needed.",
+        "operationId": "list-plans",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List plans",
+        "tags": [
+          "billing"
+        ]
+      }
+    },
+    "/v1/stats": {
+      "get": {
+        "operationId": "get-stats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Account totals",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/v1/webhooks": {
+      "get": {
+        "operationId": "list-webhooks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhooksOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List webhooks",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "post": {
+        "description": "Subscribes a URL to events. Each delivery is a JSON POST signed with the returned secret: X-Simhook-Signature is t=\u003cunix\u003e,v1=\u003chex hmac-sha256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e. Respond 2xx within 30 seconds; other responses are retried over a day.",
+        "operationId": "create-webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreatedOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create a webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/deliveries": {
+      "get": {
+        "description": "Delivery attempts across every webhook on the account, newest first, including webhooks since deleted.",
+        "operationId": "list-deliveries",
+        "parameters": [
+          {
+            "explode": false,
+            "in": "query",
+            "name": "webhook_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "pending",
+                "delivered",
+                "retrying",
+                "failed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "event",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveriesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List deliveries",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/deliveries/{id}": {
+      "get": {
+        "operationId": "get-delivery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Get a delivery",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/{id}": {
+      "delete": {
+        "operationId": "delete-webhook",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Delete a webhook",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "get": {
+        "operationId": "get-webhook",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Get a webhook",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "patch": {
+        "operationId": "update-webhook",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update a webhook",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/{id}/rotate-secret": {
+      "post": {
+        "description": "Deliveries queued from now on are signed with the new secret.",
+        "operationId": "rotate-webhook-secret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Rotate the signing secret",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/{id}/test": {
+      "post": {
+        "description": "Queues a ping delivery so you can check your endpoint and signature verification.",
+        "operationId": "test-webhook",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryOutputBody"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Send a test event",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.simhook.dev"
+    }
+  ]
+}
