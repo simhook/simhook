@@ -17,3 +17,5 @@ docs
 **/*.md
 # The site is written in Markdown; those files are content, not docs.
 !site/src/**/*.md
+# Markdown under the site's public folder is served as files (the agent skill).
+!site/public/**/*.md
