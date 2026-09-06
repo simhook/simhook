@@ -1,0 +1,71 @@
+---
+import Base from "../layouts/Base.astro";
+import { appUrl, breadcrumbs, webPage } from "../lib/seo";
+
+const app = appUrl();
+const schema = [webPage({ url: "/compare", title: "Own-SIM SMS gateway vs hosted SMS APIs" }), breadcrumbs([["Compare", "/compare"]])];
+---
+
+<Base schema={schema}>
+  <h1>Your own SIM, or a hosted SMS API?</h1>
+  <p class="lead">A hosted SMS API rents you a number and sends your messages over carrier connections it owns. You pay per message and per number, and the provider deals with the carriers, the registrations, and the short codes.</p>
+  <p>simhook sends through an Android phone and a SIM you already own. The number is yours, the carrier plan on the SIM does the sending and receiving, and simhook queues, paces, records, and reports. The two suit different jobs, and this page is about telling them apart.</p>
+
+  <section>
+    <h2>side by side</h2>
+    <table>
+      <thead><tr><th></th><th>Hosted SMS API</th><th>Your SIM with simhook</th></tr></thead>
+      <tbody>
+        <tr><td class="nowrap">Cost model</td><td>A price per message, plus a monthly fee for each number.</td><td>Your carrier plan, plus a flat simhook plan: Free, Pro at $12 a month, or Scale at $39. Self-hosted, nothing. Received texts are not counted.</td></tr>
+        <tr><td class="nowrap">The number people see</td><td>A number rented from the provider: a long code, a toll-free number, or a short code.</td><td>The SIM's own number, the one people already have for you. Replies land on the phone and in your code.</td></tr>
+        <tr><td class="nowrap">Throughput</td><td>Grows with what you pay for and register.</td><td>One phone sends one text at a time, five seconds apart by default. A consumer plan is for a person's messages, and carriers watch for anything else.</td></tr>
+        <tr><td class="nowrap">What depends on a phone</td><td>Nothing on your side.</td><td>Everything. The phone needs power, signal, and the app running. A send to an offline phone waits in its queue for up to a day.</td></tr>
+        <tr><td class="nowrap">Compliance</td><td>Sender registration, short codes, and opt-out handling are done for you or sold as a service.</td><td>Nothing is done for you. You keep your own opt-out list and follow the rules where you and your recipients are.</td></tr>
+      </tbody>
+    </table>
+    <p class="cap">Receipts: simhook reports <code>sent</code> when the carrier accepts a text from the phone and <code>delivered</code> when the carrier confirms it reached the handset. Some carriers and some recipients never produce the second one.</p>
+  </section>
+
+  <section>
+    <h2>a month of texts, costed</h2>
+    <p>Say a small business sends 3,000 texts a month: appointment reminders, order updates, replies to questions. Assume one phone, a consumer plan with unlimited texting that the business already pays for, so an extra text costs it nothing, and recipients who asked for the texts.</p>
+    <ul class="plain">
+      <li><b>simhook, hosted</b><span>$12 a month on Pro, or $120 a year, since Free stops at 30 texts a day and 500 a month. Paid plans open soon; every account is on Free until then.</span></li>
+      <li><b>simhook, self-hosted</b><span>$0 to simhook. A small server to run it on, and your time.</span></li>
+      <li><b>Time on the phone</b><span>100 texts a day at the default five-second pace take about eight minutes. The phone is free the rest of the day.</span></li>
+      <li><b>A hosted API</b><span>3,000 times its per-message price, plus the monthly rental of a number and, in some countries, sender registration. The figures differ by provider and country, so put yours next to these.</span></li>
+    </ul>
+    <p class="cap">Where the SIM's plan charges per text, add that: the carrier bill is the real cost of sending, and simhook only counts messages. <a href="/pricing">Pricing</a></p>
+  </section>
+
+  <section>
+    <h2>when not to use simhook</h2>
+    <ul class="plain">
+      <li><b>Bulk campaigns</b><span>A consumer SIM sending marketing to a list is what carriers block, and unsolicited marketing is against the terms.</span></li>
+      <li><b>Thousands a day</b><span>At five seconds a text, one phone manages about 700 an hour flat out, and a carrier notices long before that.</span></li>
+      <li><b>Regulated OTP at scale</b><span>Sign-in codes for a product with many users want registered senders and routes with a guarantee behind them.</span></li>
+      <li><b>Many countries</b><span>A SIM sends from one country at one carrier's rates. A hosted API has local routes everywhere.</span></li>
+      <li><b>An SLA</b><span>A phone in a drawer is not a contract. If someone's job depends on the text arriving, rent the route.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>when it fits</h2>
+    <ul class="plain">
+      <li><b>Development and testing</b><span>Real texts to real phones from a real number, on the free plan, with no sender registration.</span></li>
+      <li><b>Internal alerts</b><span>Deploy finished, server down, a form submitted. Low volume, your own number, your own phone.</span></li>
+      <li><b>Small-business two-way</b><span>Customers text the number they already have for you; your code replies from the same number.</span></li>
+      <li><b>Forwarding codes</b><span>One-time codes texted to a number you own, delivered to your app as a webhook.</span></li>
+      <li><b>Agents</b><span>An assistant that can text someone and wait for the reply, through the MCP server, within the limits of your plan.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>next</h2>
+    <p>Read the <a href="/docs">quickstart</a>, <a href="/download">put the app on a phone</a>, or <a href="/docs/self-hosting">run the whole thing yourself</a>.</p>
+    <div class="links">
+      <a class="btn" href={`${app}/register`}>Start free</a>
+      <a href="/pricing">Pricing</a>
+    </div>
+  </section>
+</Base>

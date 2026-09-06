@@ -1,0 +1,49 @@
+---
+import Base from "../layouts/Base.astro";
+import { CONTACT_EMAIL, GITHUB, breadcrumbs, webPage } from "../lib/seo";
+
+const schema = [webPage({ url: "/about", title: "About simhook", type: "AboutPage" }), breadcrumbs([["About", "/about"]])];
+---
+
+<Base schema={schema}>
+  <h1>About simhook</h1>
+  <p class="lead">simhook turns an Android phone into an SMS API. This page says who makes it, why it exists, what is open, where the hosted service runs, and how to reach us.</p>
+
+  <section>
+    <h2>who makes it</h2>
+    <p>simhook is made by Enes. It started in 2026, it is built in the open, and the reasoning behind each part of it is written down in the <a href={`${GITHUB}/blob/main/docs/decisions.md`}>decision records</a> in the repository.</p>
+  </section>
+
+  <section>
+    <h2>why it exists</h2>
+    <p>Most SMS APIs rent you a number and charge for every message. Many people already own numbers: the phone on the desk, a spare SIM, the shop's line. simhook lets code send and receive texts through those, without per-message pricing. The phone does the sending and receiving through its own SIM. The server keeps the records: what was sent, what the carrier said about it, what came back, and a signed webhook for each step.</p>
+    <p>Nothing about the number changes. Texts you send show your number, and texts people send you still land in the phone's messaging app; they reach your code as well.</p>
+  </section>
+
+  <section>
+    <h2>what is open</h2>
+    <p>Everything is in one <a href={GITHUB}>repository</a>. The API, the dashboard, the Android app, and the deployment files are under the AGPL-3.0: run them for yourself or your company without restriction, and if you change them and offer the result to others as a service, publish your changes. The TypeScript SDK, the MCP server, and the API contract are under the MIT licence, so they fit into any project.</p>
+    <p>The Android app is not on Google Play. It is published as a signed APK on the <a href={`${GITHUB}/releases`}>releases page</a>, with a checksum next to it. Every release is signed with the same key, and Android's installer only accepts an update signed with the key of the version already installed. The <a href="/changelog">changelog</a> lists every release of the app, the SDK, and the MCP server.</p>
+  </section>
+
+  <section>
+    <h2>where it runs</h2>
+    <p>The hosted service runs on servers at Hetzner, behind Cloudflare. This site, the dashboard, and the API run on one host from one Compose file, with a database dump every night. Resend sends the emails an account needs, and Google's Firebase Cloud Messaging wakes phones; a push carries no message content, only a nudge to check in. The <a href="/privacy">privacy page</a> lists what is stored, for how long, and who else sees it.</p>
+    <p>A copy you run yourself keeps its data on your server. <a href="/docs/self-hosting">Self-hosting</a> is one Compose file on a small machine.</p>
+  </section>
+
+  <section>
+    <h2>how to reach us</h2>
+    <ul class="plain">
+      <li><b>Anything</b><span><a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></span></li>
+      <li><b>Vulnerabilities</b><span><a href="mailto:security@simhook.dev">security@simhook.dev</a>, as <a href={`${GITHUB}/blob/main/SECURITY.md`}>SECURITY.md</a> describes. Please do not open a public issue for something that could be exploited before it is fixed.</span></li>
+      <li><b>Bugs and requests</b><span><a href={`${GITHUB}/issues`}>GitHub issues</a></span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>what it is not for</h2>
+    <p>Bulk marketing, and texting people who did not ask to hear from you. A consumer SIM is for a person's messages, carriers watch for anything else, and most countries regulate who you may text and when. simhook paces sends and shows you what went out; the rest is your responsibility. The <a href="/">home page</a> has a note on what carriers tolerate, and <a href="/compare">the comparison</a> says when a hosted SMS API is the better tool.</p>
+    <p class="cap"><a href="/privacy">Privacy</a>, <a href="/terms">terms</a>.</p>
+  </section>
+</Base>

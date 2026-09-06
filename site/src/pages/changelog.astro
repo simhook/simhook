@@ -1,0 +1,58 @@
+---
+import Base from "../layouts/Base.astro";
+import { COMPONENTS, SERVER, componentOf, listReleases, versionOf } from "../lib/releases";
+import { GITHUB, breadcrumbs, webPage } from "../lib/seo";
+
+const releases = await listReleases();
+const day = (iso: string) => iso.slice(0, 10);
+
+// The notes are written by hand as plain text with a blank line between
+// paragraphs. They are rendered as text, never as HTML, so nothing in a
+// release body can put markup on this page. Bold and code markers are
+// dropped rather than interpreted.
+const paragraphs = (body: string) =>
+  body
+    .split(/\r?\n[ \t]*\r?\n/)
+    .map((p) => p.replace(/\*\*|`/g, "").trim())
+    .filter((p) => p.length > 0);
+
+const labels = [...COMPONENTS.map(([, label]) => label), SERVER];
+const groups = labels
+  .map((label) => ({
+    label,
+    releases: (releases ?? []).filter((r) => componentOf(r.tag) === label).sort((a, b) => b.published_at.localeCompare(a.published_at)),
+  }))
+  .filter((g) => g.releases.length > 0);
+const newest = releases?.map((r) => r.published_at).filter(Boolean).sort().at(-1);
+const schema = [webPage({ url: "/changelog", title: "Changelog", ...(newest ? { updated: day(newest) } : {}) }), breadcrumbs([["Changelog", "/changelog"]])];
+---
+
+<Base schema={schema}>
+  <h1>Changelog</h1>
+  <p class="lead">Every release of the Android app, the TypeScript SDK, and the MCP server, newest first, read from the repository's releases when this page was built.</p>
+  {releases === null ? (
+    <p>The list could not be read when this page was built. Every release is on the <a href={`${GITHUB}/releases`}>releases page</a>.</p>
+  ) : groups.length === 0 ? (
+    <p>No releases yet. They appear on the <a href={`${GITHUB}/releases`}>releases page</a> first.</p>
+  ) : null}
+
+  {groups.map((g) => (
+    <section>
+      <h2>{g.label}</h2>
+      {g.releases.map((r) => (
+        <>
+          <h3>{versionOf(r.tag)}</h3>
+          <p class="meta">
+            <time datetime={r.published_at}>{day(r.published_at)}</time>, <a href={r.html_url}>GitHub release</a>{r.prerelease ? ", pre-release" : ""}
+          </p>
+          {paragraphs(r.body).map((p) => (p.startsWith("SHA-256:") ? <p class="meta">{p}</p> : <p>{p}</p>))}
+        </>
+      ))}
+    </section>
+  ))}
+
+  <section>
+    <h2>elsewhere</h2>
+    <p class="cap">The <a href="/download">download page</a> always has the current app. The SDK and the MCP server are on npm as <a href="https://www.npmjs.com/package/@simhook/sdk">@simhook/sdk</a> and <a href="https://www.npmjs.com/package/@simhook/mcp">@simhook/mcp</a>.</p>
+  </section>
+</Base>
