@@ -10,7 +10,7 @@
     "simhook",
     "agent"
   ],
-  "homepage": "https://simhook.dev",
+  "homepage": "https://simhook.dev/docs/mcp",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/simhook/simhook.git",

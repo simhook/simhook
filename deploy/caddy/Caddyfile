@@ -34,9 +34,17 @@
 	}
 }
 
+# The dashboard and the API are not for search engines: simhook.dev is the
+# one address a result should point at. The hosts stay crawlable so the
+# header is actually seen.
+(noindex) {
+	header X-Robots-Tag "noindex, nofollow"
+}
+
 {$API_DOMAIN} {
 	import cloudflare_tls
 	import security_headers
+	import noindex
 	encode zstd gzip
 	# The API reads the visitor's address from X-Real-IP and nothing else, so
 	# it is set here from the resolved client address and every client-sent
@@ -50,6 +58,7 @@
 {$APP_DOMAIN} {
 	import cloudflare_tls
 	import security_headers
+	import noindex
 	encode zstd gzip
 	reverse_proxy web:3000
 }
@@ -67,5 +76,6 @@
 
 www.{$ROOT_DOMAIN} {
 	import cloudflare_tls
+	import security_headers
 	redir https://{$ROOT_DOMAIN}{uri} permanent
 }

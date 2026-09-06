@@ -62,6 +62,8 @@ export function Footer() {
       <span>Open source, AGPL-3.0</span>
       <a href="https://github.com/simhook/simhook">GitHub</a>
       <a href={`${SITE_URL}/docs`}>Docs</a>
+      <a href={`${SITE_URL}/changelog`}>Changelog</a>
+      <a href={`${SITE_URL}/about`}>About</a>
       <a href="https://github.com/simhook/simhook/blob/main/SECURITY.md">Security</a>
       <a href={`${SITE_URL}/privacy`}>Privacy</a>
       <a href={`${SITE_URL}/terms`}>Terms</a>
