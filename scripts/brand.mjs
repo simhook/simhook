@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Draws every brand asset from one path: the favicons, the web manifest, the
 // logo for structured data, a share image for every page, the dashboard's
-// icons, and the Android drawables. Run it after changing the mark, a page
-// title, or a page description.
+// icons, and the Android drawables. It also writes the agent skills index,
+// whose digests must match the skill files byte for byte. Run it after
+// changing the mark, a page title, a page description, or a skill.
 //
 //   node scripts/brand.mjs            write everything
 //   node scripts/brand.mjs --check    compare with what is committed; exit 1 on drift (CI)
@@ -13,6 +14,7 @@
 // docs/decisions.md 019 has the geometry and the reasons.
 import satori from "satori";
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +215,35 @@ const notificationIcon = `<?xml version="1.0" encoding="utf-8"?>
 </vector>
 `;
 
+// 8. The agent skills index (Agent Skills Discovery 0.2.0): every SKILL.md
+//    under .well-known/agent-skills, with the digest of its exact bytes, so a
+//    client can verify what it downloads.
+function skillsIndex() {
+  const dir = path.join(root, "site", "public", ".well-known", "agent-skills");
+  const skills = [];
+  for (const name of readdirSync(dir).sort()) {
+    const file = path.join(dir, name, "SKILL.md");
+    if (!existsSync(file)) continue;
+    const bytes = readFileSync(file);
+    const fm = bytes.toString("utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+    const get = (key) => fm.match(new RegExp(`^${key}:[ \\t]*(.+)$`, "m"))?.[1].trim().replace(/^"(.*)"$/, "$1");
+    const description = get("description");
+    if (!/^[a-z0-9-]{1,64}$/.test(name)) fail(`${file}: the folder name must be 1-64 lowercase letters, digits, or hyphens`);
+    if (get("name") !== name) fail(`${file}: frontmatter name must equal the folder name "${name}"`);
+    if (!description || description.length > 1024) fail(`${file}: description is missing or longer than 1024 characters`);
+    if (bytes.includes("\r")) fail(`${file}: has CR line endings; the digest must match the bytes the server sends`);
+    skills.push({
+      name,
+      type: "skill-md",
+      description,
+      url: `/.well-known/agent-skills/${name}/SKILL.md`,
+      digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+    });
+  }
+  if (skills.length === 0) fail(`${dir}: no SKILL.md found`);
+  return { $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json", skills };
+}
+
 const manifest = {
   name: "simhook",
   short_name: "simhook",
@@ -313,6 +344,8 @@ async function main() {
   const drawable = "android/app/src/main/res/drawable";
   await emit(`${drawable}/ic_launcher_foreground.xml`, launcherForeground);
   await emit(`${drawable}/ic_notification.xml`, notificationIcon);
+
+  await emit(`${site}/.well-known/agent-skills/index.json`, `${JSON.stringify(skillsIndex(), null, 2)}\n`);
 
   if (check && drift.length) fail(`brand assets are stale, run pnpm brand:\n  ${drift.join("\n  ")}`);
   if (check) log("brand assets match the mark and the page titles");

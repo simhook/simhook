@@ -26,6 +26,7 @@ ${section("Docs", NAV)}${section("Guides", GUIDES)}## Reference
 - [OpenAPI document](https://api.simhook.dev/openapi.json): the machine-readable contract the API serves
 - [OpenAPI document in the repository](${GITHUB}/blob/main/packages/contracts/openapi.json)
 - [API catalog](${SITE}/.well-known/api-catalog): an RFC 9727 linkset naming the API, its OpenAPI document, its docs, and its health endpoint
+- [Agent skill](${SITE}/.well-known/agent-skills/simhook/SKILL.md): instructions an agent can install to send and receive SMS with simhook; the index with its digest is at ${SITE}/.well-known/agent-skills/index.json
 
 ## Packages
 

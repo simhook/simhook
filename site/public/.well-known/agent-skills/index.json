@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "simhook",
+      "type": "skill-md",
+      "description": "Send and receive SMS through a simhook account, where an Android phone's own SIM sends and receives behind a REST API at api.simhook.dev. Use when a task must text a phone number, follow a send to delivery, wait for an SMS reply or a verification code sent to a number the user owns, read message history, verify a simhook webhook, or set up @simhook/sdk or @simhook/mcp. Needs SIMHOOK_API_KEY.",
+      "url": "/.well-known/agent-skills/simhook/SKILL.md",
+      "digest": "sha256:e43e41684ff7ccfb058f4872c143b76d8e6c971de2d883083be550abe20c0253"
+    }
+  ]
+}

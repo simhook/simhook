@@ -24,6 +24,9 @@
 	# link relations; the catalog itself follows RFC 9727).
 	header / Link "</.well-known/api-catalog>; rel=\"api-catalog\", </docs/api>; rel=\"service-doc\""
 	header /.well-known/api-catalog Content-Type "application/linkset+json"
+	# The well-known files are public and machine-readable; agents running in a
+	# browser may read them from another origin.
+	header /.well-known/* Access-Control-Allow-Origin "*"
 
 	# Clean addresses: /pricing serves pricing.html, /docs serves docs.html
 	# (Astro writes every page as <route>.html). Files that exist are served
