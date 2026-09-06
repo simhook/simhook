@@ -43,6 +43,7 @@ pnpm install
 pnpm build      # dashboard, site, SDK, and MCP server
 pnpm test       # SDK and MCP server test suites
 pnpm contracts  # regenerate TypeScript types after changing the API
+pnpm brand      # redraw icons, share images, and Android drawables from the mark
 ```
 
 ## Using the API

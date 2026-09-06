@@ -69,6 +69,8 @@ jobs:
       - run: pnpm -r typecheck
       - run: pnpm -r test
       - run: node --check scripts/android-release.mjs
+      # Every icon, share image, and Android drawable is drawn from the mark by one script.
+      - run: pnpm brand --check
 
   android:
     name: Android

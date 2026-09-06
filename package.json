@@ -13,6 +13,13 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "contracts": "pnpm --filter @simhook/contracts generate",
+    "brand": "node scripts/brand.mjs",
     "release:android": "node scripts/android-release.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/geist-mono": "^5.3.0",
+    "@fontsource/instrument-sans": "^5.3.0",
+    "satori": "^0.33.4",
+    "sharp": "^0.35.4"
   }
 }

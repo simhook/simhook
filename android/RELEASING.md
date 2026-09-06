@@ -36,6 +36,10 @@ The git tag is `android-v<versionName>`. Test builds can override both without e
 ./gradlew assembleRelease -PversionCode=7 -PversionName=0.3.0-rc1
 ```
 
+## The icon
+
+The launcher foreground and the notification icon under `app/src/main/res/drawable/` are written by `pnpm brand` from the mark, together with every icon on the site. Change the mark there, not in the XML; a build with stale drawables fails CI.
+
 ## Cutting a release
 
 1. Bump `versionCode` and `versionName`, commit.
