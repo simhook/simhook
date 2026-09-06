@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Receiving
-description: "How texts that reach the phone reach you: forwarding, the inbound message, webhooks versus polling, and what Android does with one-time codes."
+headTitle: "Receive SMS as webhooks from your own phone"
+description: "How texts that reach the phone reach you: forwarding, the inbound message, webhooks versus polling, replying, and what Android does with one-time codes."
+updated: 2026-09-05
 ---
 
 Every text the phone receives becomes a message on your account with `direction: "inbound"`, and goes out to your webhooks as `message.received`. Nothing else is needed: no keywords, no short codes, no carrier setup.

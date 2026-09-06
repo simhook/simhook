@@ -1,17 +1,47 @@
 ---
 import Base from "../layouts/Base.astro";
 import { latestRelease, sizeLabel } from "../lib/release";
+import { appUrl, faqPage, websiteNode } from "../lib/seo";
+import pages from "../lib/pages.json";
 
 const release = await latestRelease();
 const size = sizeLabel(release);
+const app = appUrl();
+
+// The questions people ask before they try it. Rendered below and published
+// as FAQ structured data from the same list, so the two cannot drift.
+const qa = [
+  {
+    q: "Will my carrier mind?",
+    a: "Consumer plans are for people, not bulk. The app paces sends with a delay you set, and the dashboard shows what went out. Keep it to what your plan allows and to people who want your messages; for real volume use a business SIM.",
+  },
+  {
+    q: "How is this different from a hosted SMS API?",
+    a: 'A hosted API sells you numbers and charges per message; simhook routes messages through a phone and SIM you already own, so the number is yours and the cost is your carrier plan. <a href="/compare">The comparison</a> covers throughput, reliability, and when a hosted API is the better choice.',
+  },
+  {
+    q: "Does it forward one-time codes?",
+    a: 'Yes. The app targets Android 16 on purpose, because Android 17 withholds code-like texts from newer apps for three hours unless they are the default SMS app. <a href="/docs/guides/forward-verification-codes">Forwarding verification codes</a> walks through it.',
+  },
+  {
+    q: "Can I run it myself?",
+    a: 'Yes. The whole stack runs from one compose file on a small VPS, and the app can be pointed at your server when you pair it. <a href="/docs/self-hosting">Self-hosting</a>',
+  },
+  {
+    q: "Where does the app come from?",
+    a: 'From <a href="/download">this site</a>, signed and published on GitHub. Google Play does not allow apps that send SMS on your behalf unless they are your default messaging app, so simhook is installed directly and updates itself.',
+  },
+];
+const plain = (html: string) => html.replace(/<[^>]+>/g, "");
+const schema = [websiteNode(pages["/"].description), faqPage(qa.map(({ q, a }) => ({ q, a: plain(a) })))];
 ---
 
-<Base title="simhook">
-  <h1>simhook turns an Android phone into an SMS API.</h1>
+<Base schema={schema}>
+  <h1>simhook turns an Android phone into an SMS gateway and API.</h1>
   <p class="lead">Pair a phone with a SIM in it. Every message you send from code goes out through that SIM, and every text the phone receives comes back to you as a webhook. Your numbers, your carrier plan, no per-message fees.</p>
-  <p>It is a Go API you can self-host, an Android app that stays out of the way, a dashboard, a TypeScript SDK, and an MCP server so an agent can text people too.</p>
+  <p>It is an open-source Go API you can self-host, an Android app that stays out of the way, a dashboard, a TypeScript SDK, and an MCP server so an agent can text people too.</p>
   <div class="links">
-    <a class="btn" href="https://app.simhook.dev/register">Start free</a>
+    <a class="btn" href={`${app}/register`}>Start free</a>
     <a href="/download">Download the app</a>
     <span class="meta">Android 8.0+, {size ? `${size}, ` : ""}updates itself</span>
   </div>
@@ -49,10 +79,10 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
       <div class="shot">
         <div class="mini">
           <div class="stats"><div><b class="num">1,284</b><span>sent today</span></div><div><b class="num">98.6%</b><span>delivered</span></div><div><b class="num">312</b><span>received</span></div><div><b class="num">3</b><span>queued</span></div></div>
-          <div class="row"><span><span class="dot"></span>Pixel 8</span><span class="meta">Turkcell, SIM 1, checked in 40 s ago</span></div>
+          <div class="row"><span><span class="dot"></span>Pixel 8</span><span class="meta">T-Mobile, SIM 1, checked in 40 s ago</span></div>
           <div class="row"><span><span class="dot off"></span>Galaxy A54</span><span class="meta">offline 3 h</span></div>
           <div class="row"><span>+1 555 000 1111</span><span class="meta">delivered, 12:04:21</span></div>
-          <div class="row"><span>+90 532 000 0000</span><span class="meta">received, 12:03:58</span></div>
+          <div class="row"><span>+1 212 555 0148</span><span class="meta">received, 12:03:58</span></div>
           <div class="row"><span>+44 7700 900123</span><span class="meta">sent, 12:03:40</span></div>
         </div>
         <div class="shotcap">app.simhook.dev</div>
@@ -80,14 +110,12 @@ X-Simhook-Signature: t=1788618234,v1=9f3c1a...
   <section>
     <h2>questions</h2>
     <dl class="qa">
-      <dt>Will my carrier mind?</dt>
-      <dd>Consumer plans are for people, not bulk. The app paces sends with a delay you set, and the dashboard shows what went out. Keep it to what your plan allows and to people who want your messages; for real volume use a business SIM.</dd>
-      <dt>Does it forward one-time codes?</dt>
-      <dd>Yes. The app targets Android 16 on purpose, because Android 17 withholds code-like texts from newer apps for three hours unless they are the default SMS app.</dd>
-      <dt>Can I run it myself?</dt>
-      <dd>Yes. The whole stack runs from one compose file on a small VPS, and the app can be pointed at your server when you pair it. <a href="/docs/self-hosting">Self-hosting</a></dd>
-      <dt>Where does the app come from?</dt>
-      <dd>From <a href="/download">this site</a>, signed and published on GitHub. Google Play does not allow apps that send SMS on your behalf unless they are your default messaging app, so simhook is installed directly and updates itself.</dd>
+      {qa.map(({ q, a }) => (
+        <>
+          <dt>{q}</dt>
+          <dd set:html={a} />
+        </>
+      ))}
     </dl>
   </section>
 </Base>

@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Sending
-description: "The send request, the send record, the life of a message, pacing, long texts, scheduling, and plan limits."
+headTitle: "Send SMS through the API: requests, status, pacing"
+description: "POST /v1/messages: the request, the send record, the life of a message from queued to delivered, pacing, long texts, scheduling, and plan limits."
+updated: 2026-09-05
 ---
 
 A send is one text to one or more recipients, sent from one phone. `POST /v1/messages` creates it; the phone does the rest.

@@ -26,7 +26,10 @@ ARG PUBLIC_APP_URL
 ENV PUBLIC_API_URL=$PUBLIC_API_URL PUBLIC_APP_URL=$PUBLIC_APP_URL
 COPY packages/contracts packages/contracts
 COPY site site
-RUN pnpm --filter site build
+# The build fetches the two typefaces from fontsource once; the cache keeps
+# later builds offline-safe.
+RUN --mount=type=cache,id=astro-fonts,target=/app/site/node_modules/.astro/fonts \
+    pnpm --filter site build
 
 FROM caddy:2-alpine AS runner
 COPY site/Caddyfile /etc/caddy/Caddyfile

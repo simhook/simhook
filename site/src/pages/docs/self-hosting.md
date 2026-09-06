@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Self-hosting
-description: "Run the whole of simhook on one small server with Docker Compose, and point the app at it."
+headTitle: "Self-host an open-source SMS gateway with Docker"
+description: "Run the whole of simhook on one small server with Docker Compose: Postgres, the API, the dashboard, Caddy. Point the Android app at it. AGPL-3.0."
+updated: 2026-09-05
 ---
 
 Everything that runs simhook.dev is in the [repository](https://github.com/simhook/simhook) under the AGPL-3.0, and the production setup is one Compose file: Postgres, the API, the dashboard, this site, Caddy for TLS, and a nightly database dump. A small VPS runs all of it; the phones do the heavy lifting.

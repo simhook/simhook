@@ -1,6 +1,7 @@
 ---
 import Doc from "../../layouts/Doc.astro";
 import spec from "@simhook/contracts/openapi.json";
+import pages from "../../lib/pages.json";
 
 // The reference is generated at build time from the API's own OpenAPI
 // document, so it cannot drift from what the server accepts.
@@ -91,7 +92,7 @@ const errorFields = fields({ $ref: "#/components/schemas/APIError" });
 const schemaNames = Object.keys(schemas).filter((n) => n !== "APIError").sort();
 ---
 
-<Doc title="API reference" description="Every endpoint of the simhook API, generated from its OpenAPI document.">
+<Doc title="API reference" headTitle={pages["/docs/api"].title} description={pages["/docs/api"].description}>
   <p class="lead">Generated from the API's OpenAPI document, version {doc.info?.version}. The <a href="https://github.com/simhook/simhook/blob/main/packages/contracts/openapi.json">document itself</a> is in the repository, the <a href="/docs/sdk">SDK</a> is typed from it, and the API serves an <a href="https://api.simhook.dev/docs">interactive version</a> for trying requests.</p>
 
   <h2>Basics</h2>

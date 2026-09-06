@@ -14,8 +14,9 @@
   --bad: #b91c1c;
   --underline: #b8b8b4;
   --dot-off: #c9c9c5;
-  --sans: "Instrument Sans Variable", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
+  /* The faces and their metric-matched fallbacks come from astro.config.mjs (fonts). */
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
   --col: 1120px;
   --measure: 720px;
   color-scheme: light;

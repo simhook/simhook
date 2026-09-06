@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Webhooks
-description: "Events, the delivery payload, signature verification in three languages, retries, and auto-pause."
+headTitle: "SMS webhooks: events, signatures, retries"
+description: "Every event simhook sends, the delivery payload, HMAC signature verification in three languages, retries over two days, and auto-pause."
+updated: 2026-09-05
 ---
 
 A webhook is a URL on your server that simhook calls when something happens: a text arrived, a message was delivered, a phone went offline. Each call is signed with a secret only you and simhook know.

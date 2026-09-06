@@ -1,29 +1,52 @@
 ---
-import "@fontsource-variable/instrument-sans";
-import "@fontsource-variable/geist-mono";
+import { Font } from "astro:assets";
 import "../styles/global.css";
+import pages from "../lib/pages.json";
+import { BRAND, DEFAULT_DESCRIPTION, GITHUB, appUrl, apiUrl, fullTitle, normalizePath, ogImageFor, orgNode } from "../lib/seo";
 
 interface Props {
-  title: string;
+  /** The page's name, also its <title> unless headTitle is given. Pages listed in lib/pages.json may leave it out. */
+  title?: string;
+  /** The <title> and share title without the brand suffix, when it should say more than the H1. */
+  headTitle?: string;
   description?: string;
+  /** Share image under public/, overriding the page's own. */
+  image?: string;
+  /** Keep the page out of search: no canonical, a robots meta. */
+  noindex?: boolean;
+  type?: "website" | "article";
+  /** YYYY-MM-DD of the last real change, for articles. */
+  updated?: string;
+  /** Address of the page's Markdown twin, when it has one. */
+  markdown?: string;
+  /** JSON-LD nodes besides the Organization, which every page carries. */
+  schema?: object[];
   /** Reading width of the content inside the shell. The bar and footer never change. */
   measure?: "prose" | "doc" | "form";
 }
 
-const {
-  title,
-  description = "Turn an Android phone into an SMS API. Send and receive texts from your code through your own SIM, with webhooks, an SDK, and an MCP server.",
-  measure = "prose",
-} = Astro.props;
+type Registry = Record<string, { title: string; description: string; og?: string }>;
+const registry = pages as Registry;
 
-const app = (import.meta.env.PUBLIC_APP_URL as string | undefined) || "https://app.simhook.dev";
-const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/index$/, "").replace(/\/$/, "") || "/";
+const path = normalizePath(Astro.url.pathname);
+const entry = registry[path];
+const { measure = "prose", type = "website", noindex = false, schema = [], updated, markdown, image } = Astro.props;
+const title = Astro.props.headTitle ?? Astro.props.title ?? entry?.title;
+if (!title) throw new Error(`${path}: no title. Pass one to <Base> or add the page to src/lib/pages.json.`);
+const description = Astro.props.description ?? entry?.description ?? DEFAULT_DESCRIPTION;
 const here = new URL(path === "/" ? "/" : path, Astro.site);
+const shareTitle = fullTitle(title);
+const shareImage = new URL(image ?? ogImageFor(path), Astro.site);
+const app = appUrl();
+const api = apiUrl();
+// "<" is escaped so no page text can close the script element early.
+const jsonLd = JSON.stringify({ "@context": "https://schema.org", "@graph": [orgNode(), ...schema] }).replace(/</g, "\\u003c");
+
 const nav = [
   ["/docs", "Docs"],
   ["/pricing", "Pricing"],
   ["/download", "Download"],
-  ["https://github.com/simhook/simhook", "GitHub"],
+  [GITHUB, "GitHub"],
 ];
 const current = (href: string) => (href.startsWith("/") && (path === href || path.startsWith(href + "/")) ? "page" : undefined);
 ---
@@ -33,19 +56,36 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
+    <Font cssVariable="--font-sans" preload={[{ subset: "latin" }]} />
+    <Font cssVariable="--font-mono" preload={[{ subset: "latin" }]} />
+    <title>{shareTitle}</title>
     <meta name="description" content={description} />
-    <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={here} />}
+    <link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="canonical" href={here} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/site.webmanifest" />
+    {markdown && <link rel="alternate" type="text/markdown" href={markdown} />}
+    <meta property="og:site_name" content={BRAND} />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:type" content={type} />
     <meta property="og:url" content={here} />
-    <meta property="og:site_name" content="simhook" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:title" content={shareTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={shareImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={shareTitle} />
+    {type === "article" && updated && <meta property="article:modified_time" content={updated} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={shareTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={shareImage} />
+    <meta name="twitter:image:alt" content={shareTitle} />
     <meta name="theme-color" content="#ffffff" />
+    <script type="application/ld+json" is:inline set:html={jsonLd} />
     <script is:inline>
       // Runs before anything is painted. The API keeps a readable cookie
       // next to the session while a browser is signed in, so the bar can be
@@ -69,20 +109,21 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
       </main>
       <footer class="bottom">
         <span>Open source, AGPL-3.0</span>
-        <a href="https://github.com/simhook/simhook">GitHub</a>
+        <a href={GITHUB}>GitHub</a>
         <a href="/docs">Docs</a>
-        <a href="https://github.com/simhook/simhook/blob/main/SECURITY.md">Security</a>
+        <a href="/changelog">Changelog</a>
+        <a href="/about">About</a>
+        <a href={`${GITHUB}/blob/main/SECURITY.md`}>Security</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
       </footer>
     </div>
-    <script>
+    <script is:inline define:vars={{ api }}>
       // The page is static, but the visitor may be signed in to the app. The
       // API keeps a readable flag cookie in step with the session, so the bar
       // follows the cookie: read again whenever the page is shown again
       // (back and forward restore pages without running them) and after
       // signing out here, which the API answers by clearing the cookie.
-      const api = (import.meta.env.PUBLIC_API_URL as string | undefined) || "https://api.simhook.dev";
       const root = document.documentElement;
       const sync = () => {
         if (/(^|;\s*)simhook_signed_in=/.test(document.cookie)) root.dataset.session = "in";

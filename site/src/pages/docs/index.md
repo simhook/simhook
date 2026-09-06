@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: Quickstart
-description: "From nothing to a delivered text in ten minutes. An account, a phone, a key, one request, one webhook."
+headTitle: "Quickstart: send SMS from an Android phone via API"
+description: "From nothing to a delivered text in ten minutes: an account, the Android app on a phone with a SIM, an API key, one curl request, one webhook."
+updated: 2026-09-05
 ---
 
 simhook has three parts: an Android phone with a SIM that does the sending and receiving, a server that queues messages and talks to the phone, and your code, which talks to the server. This page gets all three connected.

@@ -203,3 +203,21 @@ The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: t
 **Why:** Pushing the content made the push channel the delivery path: a phone that missed a push never got the message, a delayed push sent the message late with no record of why, the sweep flipped paced sends to `unknown` while the phone was still working through them and then ignored the phone's truthful report, and a handset moved to another account kept sending for the old one. A pull model puts the phone in charge of what it sends and the API in charge of what is owed, with one row of truth between them. It also makes the self-hosting page's promise true: the push carries nothing, so a self-hoster's phones lose only speed, not messages, when they cannot be pushed.
 
 **Rules out:** Message content in a push; `dispatched` meaning anything but "the phone has fetched it".
+
+## 019. The mark and the brand pipeline
+
+**Date:** 2026-09-06
+**Decision:** The mark is a SIM card drawn on a 24-unit grid: a 15 x 21 card at (4.5, 1.5) with a 4.5-unit corner cut at the top right, and a 9 x 7.5 chip at (7.5, 10.5) divided into four pads by 1.5-unit bars. It is one compound path whose pads are holes, so the same drawing serves as the favicon on light and dark browser chrome, the Android launcher and its themed layer, the notification glyph, and the mark on every share image. Every derived file (the favicons, the web manifest icons, the logo for structured data, a 1200 x 630 share image for every page, the dashboard's icons, the Android drawables) is drawn by `scripts/brand.mjs` and committed; CI runs the script in check mode, so a stale file fails the build. Text in the share images is set from static instances of the two typefaces at build time; the site itself keeps loading the variable faces.
+
+**Why:** The first mark was drawn by hand three times with three geometries, none centred on its grid, and there was no share image at all. A stock SIM icon was considered and rejected: its licence forbids use as a logo or trademark, and a mark thousands of others use cannot identify anything. A SIM pictogram is generic, so drawing our own with our own proportions costs nothing and is ours. One path and one script mean the mark cannot drift again.
+
+**Rules out:** Hand-edited icon files; rounded corners on the mark; a second drawing for any surface; stock icons anywhere in the brand.
+
+## 020. What the site publishes for machines
+
+**Date:** 2026-09-06
+**Decision:** Every page takes its title and description from one place (`site/src/lib/pages.json` for Astro pages, the frontmatter for Markdown pages), with the brand suffix added once in the layout; a canonical address; a share card; and JSON-LD that states only facts that exist: the Organization on every page, the WebSite and the home page's questions on the home page, TechArticle and breadcrumbs on docs with a `dateModified` taken from the page's `updated` field (which the page shows too), SoftwareApplication on the download page without a rating. The origin serves a `robots.txt` with a Content Signals line allowing search, AI answers, and training, and a sitemap whose lastmod is only ever a real date. For agents the docs exist as Markdown twins (`/docs/webhooks.md`), an index at `/llms.txt`, and the whole set at `/llms-full.txt`, all marked `noindex` so search results point at the HTML. The dashboard and API hosts answer `X-Robots-Tag: noindex`, so simhook.dev is the only host in search results.
+
+**Why:** Search engines and AI answer engines reward the same things: pages they can crawl, understand, and quote, with a stable identity behind them. None of them needs special files, but agents that read documentation do, and the Markdown twins cost nothing because the pages are Markdown already. The edge's managed robots.txt said nothing; an origin file says exactly what was decided. The training signal is a single value to flip if the decision changes.
+
+**Rules out:** Titles or descriptions typed into a page by hand; markup for ratings, offers, or dates that do not exist; a second host in search results; a sitemap date that is not a real change.

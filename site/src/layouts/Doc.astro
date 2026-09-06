@@ -1,35 +1,38 @@
 ---
 import Base from "./Base.astro";
+import { GUIDES, NAV, hasMarkdownTwin, type DocFrontmatter } from "../lib/docs";
+import { breadcrumbs, formatUpdated, isoDate, normalizePath, techArticle } from "../lib/seo";
 
 interface Props {
   title?: string;
+  headTitle?: string;
   description?: string;
-  frontmatter?: { title: string; description?: string };
+  updated?: string;
+  frontmatter?: DocFrontmatter;
 }
 
-const { frontmatter } = Astro.props;
-const title = frontmatter?.title ?? Astro.props.title ?? "Docs";
-const description = frontmatter?.description ?? Astro.props.description;
-const path = Astro.url.pathname.replace(/\.html$/, "").replace(/\/$/, "");
-
-const pages = [
-  ["/docs", "Quickstart"],
-  ["/docs/sending", "Sending"],
-  ["/docs/receiving", "Receiving"],
-  ["/docs/webhooks", "Webhooks"],
-  ["/docs/sdk", "SDK"],
-  ["/docs/mcp", "MCP"],
-  ["/docs/self-hosting", "Self-hosting"],
-  ["/docs/api", "API reference"],
-];
+const fm = Astro.props.frontmatter;
+const title = fm?.title ?? Astro.props.title ?? "Docs";
+const headTitle = fm?.headTitle ?? Astro.props.headTitle;
+const description = fm?.description ?? Astro.props.description;
+const updated = isoDate(fm?.updated ?? Astro.props.updated);
+const path = normalizePath(Astro.url.pathname);
+const markdown = hasMarkdownTwin(path) ? `${path}.md` : undefined;
+const schema = [techArticle({ url: path, title: headTitle ?? title, description, updated }), breadcrumbs([["Docs", "/docs"], [title, path]])];
+const current = (href: string) => (path === href ? "page" : undefined);
 ---
 
-<Base title={`${title} · simhook`} description={description} measure="doc">
+<Base title={title} headTitle={headTitle} description={description} type="article" updated={updated} markdown={markdown} schema={schema} measure="doc">
   <nav class="docs-nav" aria-label="Documentation">
-    {pages.map(([href, label]) => <a href={href} aria-current={path === href ? "page" : undefined}>{label}</a>)}
+    {NAV.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
+  </nav>
+  <nav class="docs-nav" aria-label="Guides">
+    <span class="meta">guides</span>
+    {GUIDES.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
   </nav>
   <article class="doc">
     <h1>{title}</h1>
+    {updated && <p class="meta"><time datetime={updated}>updated {formatUpdated(updated)}</time></p>}
     <slot />
   </article>
 </Base>

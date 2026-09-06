@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: MCP server
-description: "Let Claude, Cursor, or any MCP client send and read texts through your phone."
+headTitle: "SMS MCP server: let agents send and read texts"
+description: "@simhook/mcp gives Claude, Cursor, or any MCP client eight tools to send SMS, wait for replies, and read messages through your own Android phone."
+updated: 2026-09-05
 ---
 
 `@simhook/mcp` is an [MCP](https://modelcontextprotocol.io) server over stdio. Add it to a client and the agent gets eight tools for texting through your phone, with the same limits and the same signed audit trail as everything else on the account.

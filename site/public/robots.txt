@@ -1,0 +1,7 @@
+# simhook.dev. The HTML pages are for search engines; /llms.txt, /llms-full.txt and
+# the .md twins of the docs are for AI agents. Everything may be read, cited, and learned from.
+User-agent: *
+Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+
+Sitemap: https://simhook.dev/sitemap-index.xml

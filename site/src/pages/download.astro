@@ -1,13 +1,14 @@
 ---
 import Base from "../layouts/Base.astro";
 import { latestRelease, sizeLabel } from "../lib/release";
+import { breadcrumbs, softwareApp } from "../lib/seo";
 
 const m = await latestRelease();
 const size = sizeLabel(m);
 const date = m?.released_at ? new Date(m.released_at).toISOString().slice(0, 10) : null;
 ---
 
-<Base title="Download · simhook" description="The simhook Android app: a signed APK that pairs a phone with your account, sends what your API asks for, forwards incoming texts, and updates itself.">
+<Base schema={[softwareApp(m), breadcrumbs([["Download", "/download"]])]}>
   <h1>Download simhook for Android</h1>
   <p class="lead">One APK, signed with the simhook release key. It installs directly, updates itself, and works on any phone running Android 8.0 or newer with a SIM in it.</p>
   <div class="links">

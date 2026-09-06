@@ -1,10 +1,12 @@
 ---
 layout: ../layouts/Page.astro
 title: Terms
+headTitle: "Terms of service"
 description: "The terms for using simhook.dev. Short, because the important parts are simple."
+updated: 2026-09-05
 ---
 
-These terms cover the hosted service at simhook.dev. The software itself is open source under the AGPL-3.0, and running your own copy is governed by that license, not by this page. Last updated 5 September 2026.
+These terms cover the hosted service at simhook.dev. The software itself is open source under the AGPL-3.0, and running your own copy is governed by that license, not by this page.
 
 ## The service
 

@@ -8,7 +8,9 @@
 	@trailing path_regexp trail ^/(.+)/$
 	redir @trailing /{re.trail.1} 308
 
-	# Clean addresses: /pricing serves pricing.html, /docs serves docs/index.html.
+	# Clean addresses: /pricing serves pricing.html, /docs serves docs.html
+	# (Astro writes every page as <route>.html). Files that exist are served
+	# as they are: /docs/sending.md, /llms.txt, /og/home.png.
 	try_files {path}.html {path}/index.html {path}
 	file_server
 
@@ -18,13 +20,27 @@
 		file_server
 	}
 
-	# Hashed assets never change. Pages are revalidated on every visit (a 304
-	# costs nothing), so a deploy is visible the moment it lands. Each response
-	# matches exactly one of these, so none can override another.
+	# Types Go's built-in table does not know, set before file_server runs.
+	header /site.webmanifest Content-Type "application/manifest+json"
+	header /favicon.ico Content-Type "image/x-icon"
+	@markdown path *.md
+	header @markdown Content-Type "text/markdown; charset=utf-8"
+	@agentText path /llms.txt /llms-full.txt
+	header @agentText Content-Type "text/plain; charset=utf-8"
+
+	# The Markdown twins and the agent index are for fetching, not for the
+	# search index: the HTML page is the one address a search result points at.
+	@machine path *.md /llms.txt /llms-full.txt
+	header @machine X-Robots-Tag "noindex"
+
+	# Hashed assets never change. Brand files and share images change rarely
+	# and keep their names, so a day is right for them. Pages are revalidated on
+	# every visit (a 304 costs nothing), so a deploy is visible the moment it
+	# lands. Each response matches exactly one of these groups.
 	@immutable path /_astro/*
 	header @immutable Cache-Control "public, max-age=31536000, immutable"
-	@images path /img/* /favicon.svg /favicon.png /apple-touch-icon.png
-	header @images Cache-Control "public, max-age=86400"
-	@pages not path /_astro/* /img/* /favicon.svg /favicon.png /apple-touch-icon.png
+	@assets path /img/* /og/* /brand/* /favicon.* /icon-*.png /apple-touch-icon.png /site.webmanifest
+	header @assets Cache-Control "public, max-age=86400"
+	@pages not path /_astro/* /img/* /og/* /brand/* /favicon.* /icon-*.png /apple-touch-icon.png /site.webmanifest
 	header @pages Cache-Control "no-cache"
 }

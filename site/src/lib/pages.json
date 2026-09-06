@@ -1,0 +1,36 @@
+{
+  "/": {
+    "title": "Android SMS gateway and API from your own SIM",
+    "og": "Turn an Android phone into an SMS API.",
+    "description": "Send and receive SMS from code through an Android phone and its SIM: REST API, webhooks, SDK, MCP server. Open source, self-hostable, no per-message fees."
+  },
+  "/pricing": {
+    "title": "Pricing: free plan, Pro, Scale, or self-host",
+    "description": "Free for 30 messages a day and one phone. Pro is $12 a month for 10,000 messages and three phones, Scale $39. Self-hosting is free with no limits."
+  },
+  "/download": {
+    "title": "Download the Android app (APK)",
+    "og": "Download simhook for Android",
+    "description": "A signed APK for Android 8.0 and newer: pair the phone with your account, send what the API asks, forward incoming texts, update itself. No Google Play."
+  },
+  "/docs/api": {
+    "title": "SMS API reference: every endpoint",
+    "description": "Every endpoint of the simhook REST API, generated from its OpenAPI document: messages, phones, webhooks, API keys, plans, errors, and pagination."
+  },
+  "/about": {
+    "title": "About: who makes it, the source, the licence",
+    "description": "Who makes simhook, where it runs, how to reach us, and what is open: the server under AGPL-3.0, the SDK and MCP server under MIT."
+  },
+  "/changelog": {
+    "title": "Changelog: app, SDK, and MCP server releases",
+    "description": "Every release of the simhook Android app, the TypeScript SDK, and the MCP server, with dates and notes, read from GitHub Releases at build time."
+  },
+  "/compare": {
+    "title": "Own-SIM SMS gateway vs hosted SMS APIs",
+    "description": "What changes when SMS goes through a phone and SIM you own instead of a hosted API: cost, numbers, carrier limits, reliability, and when not to do it."
+  },
+  "/404": {
+    "title": "Not found",
+    "description": "There is nothing at this address."
+  }
+}

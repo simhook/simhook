@@ -1,7 +1,9 @@
 ---
 layout: ../../layouts/Doc.astro
 title: SDK
-description: "The TypeScript client for the simhook API. No dependencies, typed from the OpenAPI contract, runs anywhere fetch does."
+headTitle: "TypeScript SDK for sending and receiving SMS"
+description: "@simhook/sdk: a dependency-free TypeScript client for the simhook API, typed from the OpenAPI contract, for Node 20+, Bun, Deno, and edge runtimes."
+updated: 2026-09-05
 ---
 
 `@simhook/sdk` is a thin, typed client over `fetch`. It has no dependencies, so it runs on Node 20 and newer, Bun, Deno, Cloudflare Workers, and Vercel Edge. It is for servers: an API key in a browser is a key given away. Field names are the API's own, in snake_case.

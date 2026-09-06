@@ -1,16 +1,29 @@
 ---
 import Base from "./Base.astro";
+import { hasMarkdownTwin, type DocFrontmatter } from "../lib/docs";
+import { breadcrumbs, formatUpdated, isoDate, normalizePath } from "../lib/seo";
 
 interface Props {
-  frontmatter: { title: string; description?: string };
+  frontmatter: DocFrontmatter;
 }
 
 const { frontmatter } = Astro.props;
+const path = normalizePath(Astro.url.pathname);
+const updated = isoDate(frontmatter.updated);
+const markdown = hasMarkdownTwin(path) ? `${path}.md` : undefined;
 ---
 
-<Base title={`${frontmatter.title} · simhook`} description={frontmatter.description}>
+<Base
+  title={frontmatter.title}
+  headTitle={frontmatter.headTitle}
+  description={frontmatter.description}
+  updated={updated}
+  markdown={markdown}
+  schema={[breadcrumbs([[frontmatter.title, path]])]}
+>
   <article class="doc">
     <h1>{frontmatter.title}</h1>
+    {updated && <p class="meta"><time datetime={updated}>updated {formatUpdated(updated)}</time></p>}
     <slot />
   </article>
 </Base>

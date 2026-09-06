@@ -1,8 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
+import { breadcrumbs } from "../lib/seo";
 ---
 
-<Base title="Pricing · simhook" description="Free for 30 messages a day. Pro and Scale for more messages and more phones. Self-hosting is free without limits.">
+<Base schema={[breadcrumbs([["Pricing", "/pricing"]])]}>
   <h1>Pricing</h1>
   <p class="lead">Messages are counted, not billed. The carrier plan on your SIM is what actually sends them, so what you pay simhook for is the routing, the receipts, the webhooks, and the dashboard.</p>
 

@@ -1,10 +1,12 @@
 ---
 layout: ../layouts/Page.astro
 title: Privacy
+headTitle: "Privacy policy"
 description: "What simhook stores, why, for how long, and who else sees it."
+updated: 2026-09-05
 ---
 
-simhook relays text messages through your own phone. To do that it has to hold some of your data. This page says what, in plain words. Last updated 5 September 2026.
+simhook relays text messages through your own phone. To do that it has to hold some of your data. This page says what, in plain words.
 
 ## What we store
 
