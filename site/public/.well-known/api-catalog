@@ -1,0 +1,11 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://api.simhook.dev/",
+      "service-desc": [{ "href": "https://api.simhook.dev/openapi.json", "type": "application/json" }],
+      "service-doc": [{ "href": "https://simhook.dev/docs/api", "type": "text/html" }],
+      "service-meta": [{ "href": "https://simhook.dev/llms.txt", "type": "text/plain" }],
+      "status": [{ "href": "https://api.simhook.dev/healthz" }]
+    }
+  ]
+}

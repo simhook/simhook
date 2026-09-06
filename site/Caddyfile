@@ -8,6 +8,23 @@
 	@trailing path_regexp trail ^/(.+)/$
 	redir @trailing /{re.trail.1} 308
 
+	# An agent may ask for a page as Markdown (Accept: text/markdown). A page
+	# with a Markdown twin answers with the twin at the same address; browsers
+	# keep the HTML, and Vary tells caches the answer depends on Accept.
+	@hasTwin file {path}.md
+	header @hasTwin Vary Accept
+	@wantsMarkdown {
+		header_regexp Accept text/markdown
+		file {path}.md
+	}
+	header @wantsMarkdown Content-Type "text/markdown; charset=utf-8"
+	rewrite @wantsMarkdown {path}.md
+
+	# Where the API is, for agents that start at the front door (RFC 8288
+	# link relations; the catalog itself follows RFC 9727).
+	header / Link "</.well-known/api-catalog>; rel=\"api-catalog\", </docs/api>; rel=\"service-doc\""
+	header /.well-known/api-catalog Content-Type "application/linkset+json"
+
 	# Clean addresses: /pricing serves pricing.html, /docs serves docs.html
 	# (Astro writes every page as <route>.html). Files that exist are served
 	# as they are: /docs/sending.md, /llms.txt, /og/home.png.

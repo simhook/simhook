@@ -25,6 +25,7 @@ ${section("Docs", NAV)}${section("Guides", GUIDES)}## Reference
 - [API reference](${SITE}/docs/api): every endpoint, generated from the OpenAPI document
 - [OpenAPI document](https://api.simhook.dev/openapi.json): the machine-readable contract the API serves
 - [OpenAPI document in the repository](${GITHUB}/blob/main/packages/contracts/openapi.json)
+- [API catalog](${SITE}/.well-known/api-catalog): an RFC 9727 linkset naming the API, its OpenAPI document, its docs, and its health endpoint
 
 ## Packages
 
