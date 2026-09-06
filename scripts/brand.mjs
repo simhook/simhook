@@ -30,8 +30,8 @@ const fail = (m) => {
 //    pads are holes, so the same drawing works on any background, as an
 //    alpha-only Android icon, and as a notification glyph.
 const MARK = "M4.5 1.5H15L19.5 6V22.5H4.5ZM7.5 10.5V13.5H11.25V10.5ZM12.75 10.5V13.5H16.5V10.5ZM7.5 15V18H11.25V15ZM12.75 15V18H16.5V15Z";
-// The 16 px favicon keeps one chip hole; four pads would be a grey smudge.
-const MARK_SMALL = "M4.5 1.5H15L19.5 6V22.5H4.5ZM7.5 10.5V18H16.5V10.5Z";
+// The same drawing at every size, 16 px included: the cross goes soft there,
+// and that is accepted so the mark never changes shape.
 const FULL = "0 0 24 24"; // favicons, notification icon
 const FRAMED = "-3 -3 30 30"; // touch icon, manifest icons, logo: the mark box is 80 % of the canvas
 const MASK = "-5 -5 34 34"; // maskable icon: the card stays inside the 80 % safe circle
@@ -262,11 +262,10 @@ async function main() {
   const favicon = svgOf(MARK, { darkMode: true });
   await emit(`${site}/favicon.svg`, favicon);
   await emit(`${site}/brand/mark.svg`, `<!-- The simhook mark. Original work on a 24-unit grid; docs/decisions.md 019. -->\n${svgOf(MARK)}\n`);
-  await emit(`${site}/brand/mark-small.svg`, `<!-- The simhook mark for 16 px: one chip hole. -->\n${svgOf(MARK_SMALL)}\n`);
   await emit(
     `${site}/favicon.ico`,
     ico([
-      { size: 16, data: await png(svgOf(MARK_SMALL, { size: 16 })) },
+      { size: 16, data: await png(svgOf(MARK, { size: 16 })) },
       { size: 32, data: await png(svgOf(MARK, { size: 32 })) },
       { size: 48, data: await png(svgOf(MARK, { size: 48 })) },
     ]),
