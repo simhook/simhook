@@ -2,7 +2,7 @@
 import { Font } from "astro:assets";
 import "../styles/global.css";
 import pages from "../lib/pages.json";
-import { BRAND, DEFAULT_DESCRIPTION, GITHUB, appUrl, apiUrl, fullTitle, normalizePath, ogImageFor, orgNode } from "../lib/seo";
+import { BRAND, DEFAULT_DESCRIPTION, GITHUB, appUrl, apiUrl, fullTitle, isoDateTime, normalizePath, ogImageFor, orgNode } from "../lib/seo";
 
 interface Props {
   /** The page's name, also its <title> unless headTitle is given. Pages listed in lib/pages.json may leave it out. */
@@ -78,7 +78,7 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content={shareTitle} />
-    {type === "article" && updated && <meta property="article:modified_time" content={updated} />}
+    {type === "article" && updated && <meta property="article:modified_time" content={isoDateTime(updated)} />}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={shareTitle} />
     <meta name="twitter:description" content={description} />

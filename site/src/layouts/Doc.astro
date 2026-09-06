@@ -1,7 +1,7 @@
 ---
 import Base from "./Base.astro";
 import { GUIDES, NAV, hasMarkdownTwin, type DocFrontmatter } from "../lib/docs";
-import { breadcrumbs, formatUpdated, isoDate, normalizePath, techArticle } from "../lib/seo";
+import { breadcrumbs, formatUpdated, isoDate, normalizePath, ogImageFor, techArticle } from "../lib/seo";
 
 interface Props {
   title?: string;
@@ -18,7 +18,7 @@ const description = fm?.description ?? Astro.props.description;
 const updated = isoDate(fm?.updated ?? Astro.props.updated);
 const path = normalizePath(Astro.url.pathname);
 const markdown = hasMarkdownTwin(path) ? `${path}.md` : undefined;
-const schema = [techArticle({ url: path, title: headTitle ?? title, description, updated }), breadcrumbs([["Docs", "/docs"], [title, path]])];
+const schema = [techArticle({ url: path, title: headTitle ?? title, description, updated, image: ogImageFor(path) }), breadcrumbs([["Docs", "/docs"], [title, path]])];
 const current = (href: string) => (path === href ? "page" : undefined);
 ---
 

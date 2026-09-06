@@ -48,6 +48,9 @@ export function ogImageFor(path: string): string {
 export const isoDate = (v: unknown): string | undefined =>
   v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === "string" && v ? v.slice(0, 10) : undefined;
 
+/** Google wants dates in structured data as full timestamps with a zone; a page's `updated` day becomes midnight UTC. */
+export const isoDateTime = (day: string) => `${day}T00:00:00+00:00`;
+
 export const formatUpdated = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -82,14 +85,15 @@ export const breadcrumbs = (items: [string, string][]): Node => ({
   itemListElement: items.map(([name, url], i) => ({ "@type": "ListItem", position: i + 1, name, item: `${SITE}${url}` })),
 });
 
-export const techArticle = (o: { url: string; title: string; description?: string; updated?: string }): Node => ({
+export const techArticle = (o: { url: string; title: string; description?: string; updated?: string; image?: string }): Node => ({
   "@type": "TechArticle",
   "@id": `${SITE}${o.url}#article`,
   headline: o.title,
   ...(o.description ? { description: o.description } : {}),
   url: `${SITE}${o.url}`,
   mainEntityOfPage: `${SITE}${o.url}`,
-  ...(o.updated ? { dateModified: o.updated } : {}),
+  ...(o.image ? { image: [`${SITE}${o.image}`] } : {}),
+  ...(o.updated ? { dateModified: isoDateTime(o.updated) } : {}),
   inLanguage: "en",
   author: { "@id": ORG_ID },
   publisher: { "@id": ORG_ID },
@@ -119,7 +123,7 @@ export const softwareApp = (m: Manifest | null): Node => ({
     ? {
         softwareVersion: m.version_name,
         fileSize: `${(m.size_bytes / 1048576).toFixed(1)}MB`,
-        ...(m.released_at ? { datePublished: m.released_at.slice(0, 10) } : {}),
+        ...(m.released_at ? { datePublished: m.released_at } : {}),
         ...(m.notes ? { releaseNotes: m.notes } : {}),
       }
     : {}),
@@ -131,7 +135,7 @@ export const webPage = (o: { url: string; title: string; description?: string; u
   url: `${SITE}${o.url}`,
   name: o.title,
   ...(o.description ? { description: o.description } : {}),
-  ...(o.updated ? { dateModified: o.updated } : {}),
+  ...(o.updated ? { dateModified: isoDateTime(o.updated) } : {}),
   isPartOf: { "@id": SITE_ID },
   about: { "@id": ORG_ID },
 });
