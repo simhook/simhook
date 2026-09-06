@@ -159,8 +159,13 @@ async function card({ W, H, title, description, eyebrow, url }) {
         : h("div", { position: "absolute", left: 0, top: 0, width: 0, height: 0, display: "flex" }),
       h("div", { position: "absolute", left: 80, top: 268, width: R - 80, display: "block", fontFamily: "Instrument Sans", fontWeight: 600, fontSize: 72, lineHeight: 1.11, letterSpacing: -0.72, lineClamp: 2 }, title),
       h("div", { position: "absolute", left: 80, top: H - 150, width: R - 80, height: 1, display: "flex", backgroundColor: LINE }),
-      h("div", { position: "absolute", left: 80, top: H - 118, maxWidth: R - 80 - 240, display: "block", fontFamily: "Instrument Sans", fontWeight: 400, fontSize: 26, lineHeight: 1.46, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, description),
-      h("div", { position: "absolute", right: 80, top: H - 118, display: "flex", fontFamily: "Geist Mono", fontWeight: 400, fontSize: 26, lineHeight: 1.46, color: MUTED }, url),
+      // One row: the description takes what the address leaves, and is cut with an ellipsis rather than run under it.
+      h(
+        "div",
+        { position: "absolute", left: 80, top: H - 118, width: R - 80, display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", color: MUTED },
+        h("div", { flexShrink: 1, minWidth: 0, display: "block", fontFamily: "Instrument Sans", fontWeight: 400, fontSize: 26, lineHeight: 1.46, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, description),
+        h("div", { flexShrink: 0, marginLeft: 40, display: "flex", fontFamily: "Geist Mono", fontWeight: 400, fontSize: 26, lineHeight: 1.46 }, url),
+      ),
     ),
     { width: W, height: H, fonts },
   );
@@ -293,7 +298,7 @@ async function main() {
       W: 1280,
       H: 640,
       title: "simhook turns an Android phone into an SMS API.",
-      description: "Go API, Android app, dashboard, TypeScript SDK, MCP server. AGPL-3.0, self-hostable.",
+      description: "Go API, Android app, dashboard, SDK, MCP server.",
       url: "github.com/simhook/simhook",
     }),
   );
