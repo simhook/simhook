@@ -102,5 +102,6 @@ docker compose -f docker-compose.prod.yaml exec -T postgres pg_restore -U simhoo
 - The API trusts forwarded client addresses only because compose sets `SIMHOOK_TRUST_PROXY=true`. Do not set that on an instance exposed without a proxy.
 - Logs: `docker compose -f docker-compose.prod.yaml logs -f api web site caddy`. Each container keeps five 20 MB files.
 - Every host answers with HSTS, `nosniff`, `frame-ancestors 'none'`, and a referrer policy; Caddy adds them, so the apps do not have to.
+- The site image bakes in the latest app release and the changelog when it is built. After an Android release, rebuild it without the layer cache (`docker compose -f docker-compose.prod.yaml build --no-cache site`, then `up -d site`); a cached build keeps showing the previous version.
 - The API and dashboard hosts answer with `X-Robots-Tag: noindex, nofollow`, so only the site is in search results. The dashboard also ships a `robots.txt` that disallows crawling; if Search Console ever reports a dashboard address as "indexed, though blocked by robots.txt", allow crawling there and let the header do the work.
 - `simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release under `ANDROID_RELEASES_URL` (default `https://github.com/simhook/simhook`). The phone app polls the first address for updates; see `android/RELEASING.md`.

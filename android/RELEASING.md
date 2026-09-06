@@ -60,6 +60,14 @@ The launcher foreground and the notification icon under `app/src/main/res/drawab
 
    The script creates the GitHub release `android-v<version>` in the releases repository (`--repo`, default `simhook/simhook`) with the four files and marks it latest. Nothing else changes: `https://simhook.dev/download/android.json` and `/download/simhook.apk` redirect to the latest release, so installed apps pick the new build up within twelve hours, or the next time someone opens the app.
 
+5. Rebuild the site. Its download page and changelog read the release when the site is built, and Docker reuses the previous build when no site file changed, so on the host run:
+
+   ```
+   cd /opt/simhook/deploy
+   docker compose -f docker-compose.prod.yaml build --no-cache site
+   docker compose -f docker-compose.prod.yaml up -d site
+   ```
+
 If a build must not be offered to older apps, pass `--min-code <versionCode>`: apps below it show the update as required.
 
 ## The manifest
