@@ -44,8 +44,8 @@ android {
         // Stays at 36 on purpose: Android 17 withholds one-time-code texts from apps
         // targeting 37 for three hours unless they are the default SMS app. See docs/decisions.md 009.
         targetSdk = 36
-        versionCode = prop("versionCode")?.toInt() ?: 4
-        versionName = prop("versionName") ?: "0.1.2"
+        versionCode = prop("versionCode")?.toInt() ?: 5
+        versionName = prop("versionName") ?: "0.1.3"
         vectorDrawables.useSupportLibrary = true
 
         // Where the app looks for newer builds. See docs/decisions.md 012.
