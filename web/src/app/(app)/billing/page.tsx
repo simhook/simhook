@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LoadError, PageHeader, textLink } from "@/components/page-header";
 import { useAccount, useSession } from "@/components/session-provider";
 import { errorMessage } from "@/lib/api";
-import { absoluteTime, formatCount, limitLabel, priceLabel } from "@/lib/format";
+import { absoluteDate, formatCount, limitLabel, priceLabel } from "@/lib/format";
 import { useBilling, useBillingMutations, useCheckoutState, usePlans, type BillingStatus } from "@/lib/queries";
 
 type Interval = "month" | "year";
@@ -25,6 +25,20 @@ const closedCopy: Record<string, string> = {
 
 function intervalWord(interval: string | undefined) {
   return interval === "year" ? "yearly" : "monthly";
+}
+
+/** "$12.00 a month" or "$120.00 a year". */
+function priceWords(p: Plan, interval: Interval) {
+  return interval === "year" ? `${priceLabel(p.yearly_price_cents)} a year` : `${priceLabel(p.monthly_price_cents)} a month`;
+}
+
+/** What a plan costs per month at an interval, in cents: the measure of up or down. */
+function perMonth(p: Plan, interval: Interval) {
+  return interval === "year" ? p.yearly_price_cents / 12 : p.monthly_price_cents;
+}
+
+function isLive(status: string | undefined) {
+  return status === "active" || status === "trialing" || status === "past_due";
 }
 
 /** Waits for a checkout the browser came back from, then says so. */
@@ -87,11 +101,11 @@ function PlanLine({ status }: { status: BillingStatus }) {
   if (!sub) {
     return <CardDescription>You are on Free. {used}</CardDescription>;
   }
-  const when = sub.current_period_end ? absoluteTime(sub.current_period_end) : "";
+  const when = absoluteDate(sub.current_period_end);
   let ends: string;
   if (sub.status === "past_due") ends = "The last payment failed; the card is being retried.";
   else if (sub.cancel_at_period_end) ends = when ? `It ends on ${when}.` : "It ends at the end of this period.";
-  else if (sub.pending) ends = `It changes to ${sub.pending.plan_name}, ${intervalWord(sub.pending.interval)}, on ${absoluteTime(sub.pending.at)}.`;
+  else if (sub.pending) ends = `On ${absoluteDate(sub.pending.at)} it becomes ${sub.pending.plan_name}, ${intervalWord(sub.pending.interval)}.`;
   else if (!sub.managed) ends = "It was set up by hand.";
   else ends = when ? `It renews on ${when} for ${priceLabel(sub.price_cents)}.` : "";
   return (
@@ -101,33 +115,47 @@ function PlanLine({ status }: { status: BillingStatus }) {
   );
 }
 
+/** Which way a change goes and what it will do, in words. */
+function describeChange(plans: Plan[], status: BillingStatus, target: Plan, interval: Interval) {
+  const sub = status.subscription;
+  const current = sub ? plans.find((p) => p.id === sub.plan_id) : undefined;
+  const currentInterval: Interval = sub?.interval === "year" ? "year" : "month";
+  const up = !sub || !current || perMonth(target, interval) >= perMonth(current, currentInterval);
+  const samePlan = !!sub && sub.plan_id === target.id;
+  const verb = samePlan ? (interval === "year" ? "Pay yearly" : "Pay monthly") : up ? `Upgrade to ${target.name}` : `Downgrade to ${target.name}`;
+  const when = absoluteDate(sub?.current_period_end);
+  const currentName = current?.name ?? "current";
+  const what = `${target.name}, billed ${intervalWord(interval)}, ${priceWords(target, interval)}.`;
+  const whenText = when ? `on ${when}` : "at the next renewal";
+  const then = up
+    ? `It applies now. Polar charges or credits the difference for the rest of the current period right away${samePlan ? "." : ", and the new price at each renewal."}`
+    : samePlan
+      ? `It applies ${whenText}, when the current period ends; until then you keep paying ${intervalWord(currentInterval)}. Nothing is refunded.`
+      : `It applies ${whenText}, when the current ${currentName} period ends. You keep ${currentName} until then, and nothing is refunded.`;
+  return { verb, up, text: `${what} ${then}` };
+}
+
 function PlansTable({ status, interval }: { status: BillingStatus; interval: Interval }) {
   const { limits } = useAccount();
   const plans = usePlans();
   const { checkout, change } = useBillingMutations();
   const sub = status.subscription;
-  const managed = !!sub?.managed && (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due");
+  const managed = !!sub?.managed && isLive(sub.status);
   const [busy, setBusy] = useState<string | null>(null);
+  // A plan change waits for a word of confirmation, since it moves money
+  // or a date; a first purchase has Polar's checkout page for that. The
+  // pick remembers the interval it was made under, so switching intervals
+  // drops it without an effect.
+  const [pick, setPick] = useState<{ plan: Plan; interval: Interval } | null>(null);
+  const choice = pick && pick.interval === interval ? pick.plan : null;
 
+  const list = plans.data?.data ?? [];
   const price = (p: Plan) => (interval === "year" ? p.yearly_price_cents : p.monthly_price_cents);
   const isCurrent = (p: Plan) => p.id === limits.plan_id && (!sub || !sub.managed || sub.interval === interval || p.monthly_price_cents === 0);
+  const isPending = (p: Plan) => !!sub?.pending && sub.pending.plan_id === p.id && sub.pending.interval === interval;
 
-  const choose = (p: Plan) => {
+  const buy = (p: Plan) => {
     setBusy(p.id);
-    if (managed) {
-      change.mutate(
-        { plan_id: p.id, interval },
-        {
-          onSuccess: (r) => {
-            const s = r.subscription;
-            toast.success(s?.pending ? `${p.name} starts on ${absoluteTime(s.pending.at)}.` : `You are on ${p.name} now.`);
-          },
-          onError: (e) => toast.error(errorMessage(e)),
-          onSettled: () => setBusy(null),
-        },
-      );
-      return;
-    }
     checkout.mutate(
       { plan_id: p.id, interval },
       {
@@ -140,51 +168,96 @@ function PlansTable({ status, interval }: { status: BillingStatus; interval: Int
     );
   };
 
+  const confirm = (p: Plan) => {
+    setBusy(p.id);
+    change.mutate(
+      { plan_id: p.id, interval },
+      {
+        onSuccess: (r) => {
+          const s = r.subscription;
+          toast.success(s?.pending ? `${p.name} starts on ${absoluteDate(s.pending.at)}.` : `You are on ${p.name} now.`);
+          setPick(null);
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+        onSettled: () => setBusy(null),
+      },
+    );
+  };
+
   if (plans.isPending) return <Skeleton className="h-32" />;
   if (plans.isError) return <LoadError error={plans.error} retry={() => plans.refetch()} />;
+  const chosen = choice ? describeChange(list, status, choice, interval) : null;
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Plan</TableHead>
-            <TableHead>Per day</TableHead>
-            <TableHead>Per month</TableHead>
-            <TableHead>Per send</TableHead>
-            <TableHead>Phones</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead className="text-right" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(plans.data?.data ?? []).map((p) => {
-            const paid = p.monthly_price_cents > 0;
-            const current = isCurrent(p);
-            return (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.name}</TableCell>
-                <TableCell>{limitLabel(p.daily_limit)}</TableCell>
-                <TableCell>{limitLabel(p.monthly_limit)}</TableCell>
-                <TableCell>{limitLabel(p.batch_limit)}</TableCell>
-                <TableCell>{limitLabel(p.device_limit)}</TableCell>
-                <TableCell className="text-right">
-                  {priceLabel(price(p))}
-                  {paid ? <span className="text-muted-foreground">{interval === "year" ? "/yr" : "/mo"}</span> : null}
-                </TableCell>
-                <TableCell className="text-right">
-                  {current ? (
-                    <span className="font-mono text-[11px] text-muted-foreground">current</span>
-                  ) : paid && (status.checkout.available || managed) ? (
-                    <Button size="sm" variant={managed ? "outline" : "default"} disabled={busy !== null} onClick={() => choose(p)}>
-                      {busy === p.id ? "One moment" : managed ? `Switch to ${p.name}` : `Choose ${p.name}`}
-                    </Button>
-                  ) : null}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+    <div className="grid gap-4">
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Plan</TableHead>
+              <TableHead>Per day</TableHead>
+              <TableHead>Per month</TableHead>
+              <TableHead>Per send</TableHead>
+              <TableHead>Phones</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="text-right" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {list.map((p) => {
+              const paid = p.monthly_price_cents > 0;
+              const current = isCurrent(p);
+              const label = managed ? describeChange(list, status, p, interval).verb : `Choose ${p.name}`;
+              return (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell>{limitLabel(p.daily_limit)}</TableCell>
+                  <TableCell>{limitLabel(p.monthly_limit)}</TableCell>
+                  <TableCell>{limitLabel(p.batch_limit)}</TableCell>
+                  <TableCell>{limitLabel(p.device_limit)}</TableCell>
+                  <TableCell className="text-right">
+                    {priceLabel(price(p))}
+                    {paid ? <span className="text-muted-foreground">{interval === "year" ? "/yr" : "/mo"}</span> : null}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {current ? (
+                      <span className="font-mono text-[11px] text-muted-foreground">
+                        {sub?.pending && sub.current_period_end ? `current until ${absoluteDate(sub.current_period_end)}` : "current"}
+                      </span>
+                    ) : isPending(p) ? (
+                      <span className="font-mono text-[11px] text-muted-foreground">from {absoluteDate(sub?.pending?.at)}</span>
+                    ) : paid && (status.checkout.available || managed) ? (
+                      <Button
+                        size="sm"
+                        variant={managed ? "outline" : "default"}
+                        aria-pressed={choice?.id === p.id}
+                        disabled={busy !== null}
+                        onClick={() => (managed ? setPick(choice?.id === p.id ? null : { plan: p, interval }) : buy(p))}
+                      >
+                        {busy === p.id ? "One moment" : label}
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      {choice && chosen ? (
+        <div className="border-l-2 border-foreground pl-4 text-sm">
+          <p>
+            <span className="font-medium">{chosen.verb}.</span> {chosen.text}
+          </p>
+          <div className="mt-3 flex items-center gap-4">
+            <Button size="sm" disabled={busy !== null} onClick={() => confirm(choice)}>
+              {busy === choice.id ? "One moment" : chosen.up ? "Confirm and pay" : "Confirm"}
+            </Button>
+            <button type="button" className={textLink} disabled={busy !== null} onClick={() => setPick(null)}>
+              Keep {sub?.plan_name ?? "current plan"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -198,7 +271,7 @@ function BillingPage() {
   const [interval, setInterval] = useState<Interval>("month");
   const status = billing.data;
   const sub = status?.subscription;
-  const managed = !!sub?.managed && (sub.status === "active" || sub.status === "trialing" || sub.status === "past_due");
+  const managed = !!sub?.managed && isLive(sub.status);
 
   // The interval follows the subscription until the reader changes it.
   const seeded = useRef(false);
@@ -229,20 +302,13 @@ function BillingPage() {
               {!status.checkout.available && !managed ? (
                 <p className="text-sm text-muted-foreground">{closedCopy[status.checkout.reason ?? "closed"] ?? closedCopy.closed}</p>
               ) : (
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="font-mono text-xs tracking-wide text-muted-foreground">billed</span>
+                <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Billing interval">
                   {(["month", "year"] as const).map((i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      aria-pressed={interval === i}
-                      className={interval === i ? "font-medium underline underline-offset-4" : textLink}
-                      onClick={() => setInterval(i)}
-                    >
-                      {i === "month" ? "monthly" : "yearly"}
-                    </button>
+                    <Button key={i} size="xs" variant={interval === i ? "default" : "secondary"} aria-pressed={interval === i} onClick={() => setInterval(i)}>
+                      {i === "month" ? "Billed monthly" : "Billed yearly"}
+                    </Button>
                   ))}
-                  {interval === "year" ? <span className="text-muted-foreground">two months free</span> : null}
+                  <span className="ml-2 text-muted-foreground">Yearly is ten months for twelve.</span>
                 </div>
               )}
               <PlansTable status={status} interval={interval} />
@@ -257,7 +323,7 @@ function BillingPage() {
                         onSuccess: (r) =>
                           toast.success(
                             r.subscription?.current_period_end
-                              ? `Your plan ends on ${absoluteTime(r.subscription.current_period_end)}. You keep it until then.`
+                              ? `Your plan ends on ${absoluteDate(r.subscription.current_period_end)}. You keep it until then.`
                               : "Your plan ends at the end of this period.",
                           ),
                         onError: (e) => toast.error(errorMessage(e)),

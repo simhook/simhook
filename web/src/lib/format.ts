@@ -30,6 +30,14 @@ export function absoluteTime(iso: string | null | undefined): string {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** "Oct 7, 2026": for dates where the time of day is noise. */
+export function absoluteDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
 export function formatCount(n: number | null | undefined): string {
   return new Intl.NumberFormat().format(n ?? 0);
 }
