@@ -104,6 +104,7 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
           <a class="when-in" href="#" data-signout>Sign out</a>
         </span>
       </nav>
+      <slot name="above" />
       <main class:list={[`measure-${measure}`]}>
         <slot />
       </main>
@@ -131,6 +132,10 @@ const current = (href: string) => (href.startsWith("/") && (path === href || pat
       };
       sync();
       window.addEventListener("pageshow", sync);
+      // A row of words that scrolls sideways shows the current word first.
+      for (const row of document.querySelectorAll("nav.top .links, nav.docs-nav")) {
+        row.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
       document.querySelector("[data-signout]")?.addEventListener("click", (e) => {
         e.preventDefault();
         fetch(`${api}/v1/auth/logout`, { method: "POST", credentials: "include" })

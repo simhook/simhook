@@ -26,7 +26,7 @@ function AppBar() {
       isActive={(href) => pathname === href || pathname.startsWith(href + "/")}
       right={
         <>
-          <span className="hidden max-w-[240px] truncate sm:inline" title={email}>
+          <span className="hidden max-w-[240px] truncate xl:inline" title={email}>
             {email}
           </span>
           <a href={`${SITE_URL}/docs`} className="hover:text-foreground">

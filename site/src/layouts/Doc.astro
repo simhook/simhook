@@ -23,11 +23,9 @@ const current = (href: string) => (path === href ? "page" : undefined);
 ---
 
 <Base title={title} headTitle={headTitle} description={description} type="article" updated={updated} markdown={markdown} schema={schema} measure="doc">
-  <nav class="docs-nav" aria-label="Documentation">
+  <nav class="docs-nav" slot="above" aria-label="Documentation">
     {NAV.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
-  </nav>
-  <nav class="docs-nav" aria-label="Guides">
-    <span class="meta">guides</span>
+    <span class="sep" aria-hidden="true"></span>
     {GUIDES.map(([href, label]) => <a href={href} aria-current={current(href)}>{label}</a>)}
   </nav>
   <article class="doc">

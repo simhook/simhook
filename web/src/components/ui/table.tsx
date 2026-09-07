@@ -3,12 +3,15 @@
 import * as React from "react"
 import { cn } from "cn"
 
-// Hairlines between rows, a black rule under the header, mono labels.
+// Hairlines between rows, a black rule under the header, mono labels. The
+// box around the table scrolls sideways when the table is wider than the
+// page, and tells the layout nothing about the table's width: without
+// that, a grid or flex column holding a wide table grows past the page.
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative w-full overflow-x-auto [contain:inline-size]"
     >
       <table
         data-slot="table"

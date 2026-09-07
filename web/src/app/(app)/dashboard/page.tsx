@@ -134,7 +134,7 @@ export default function DashboardPage() {
             {recent.isPending ? "Loading…" : "Nothing yet. Pair a phone and send your first message."}
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto [contain:inline-size]">
             <table className="w-full text-sm">
               <tbody>
                 {recentMessages.map((m) => (

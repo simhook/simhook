@@ -62,7 +62,9 @@ nav.top {
   font-size: 14px;
   border-bottom: 1px solid var(--line);
 }
-nav.top .links { display: flex; flex-wrap: wrap; gap: 20px; }
+/* The words never wrap: a row that does not fit scrolls sideways, scrollbar hidden. */
+nav.top .links { display: flex; gap: 20px; flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+nav.top .links::-webkit-scrollbar { display: none; }
 nav.top a { text-decoration: none; color: var(--muted); }
 nav.top a:hover, nav.top a[aria-current="page"] { color: var(--fg); }
 nav.top .wm { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--fg); margin-right: 4px; }
@@ -167,7 +169,9 @@ dl.qa dt:first-child { margin-top: 0; }
 .mini .stats span { color: var(--muted); font-size: 10.5px; font-family: var(--mono); }
 
 /* docs */
-nav.docs-nav { display: flex; gap: 16px; flex-wrap: wrap; padding: 14px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+nav.docs-nav { display: flex; align-items: center; gap: 16px; padding: 14px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+nav.docs-nav::-webkit-scrollbar { display: none; }
+nav.docs-nav .sep { flex: none; width: 1px; height: 14px; background: var(--line); margin: 0 4px; }
 nav.docs-nav a { text-decoration: none; color: var(--muted); }
 nav.docs-nav a:hover { color: var(--fg); }
 nav.docs-nav a[aria-current="page"] { color: var(--fg); text-decoration: underline; text-underline-offset: 6px; }
@@ -205,6 +209,8 @@ article.doc img { max-width: 100%; height: auto; }
   nav.top .wm { grid-row: 1; grid-column: 1; }
   nav.top .right { grid-row: 1; grid-column: 2; margin-left: 0; justify-self: end; }
   nav.top .links { grid-row: 2; grid-column: 1 / -1; gap: 16px; }
+  /* A table wider than the phone scrolls inside its own box. */
+  main table { display: block; overflow-x: auto; max-width: 100%; }
   ul.plain li { flex-direction: column; gap: 2px; }
   .idx { columns: 1; }
 }
