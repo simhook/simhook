@@ -3,7 +3,7 @@ layout: ../../layouts/Doc.astro
 title: Quickstart
 headTitle: "Quickstart: send SMS from an Android phone via API"
 description: "From nothing to a delivered text in ten minutes: an account, the Android app on a phone with a SIM, an API key, one curl request, one webhook."
-updated: 2026-09-05
+updated: 2026-09-07
 ---
 
 simhook has three parts: an Android phone with a SIM that does the sending and receiving, a server that queues messages and talks to the phone, and your code, which talks to the server. This page gets all three connected.
@@ -14,11 +14,11 @@ Sign up at [app.simhook.dev](https://app.simhook.dev/register) and confirm your 
 
 ## 2. Put the app on a phone
 
-Any Android phone from 8.0 up with a SIM in it. [Download the app](/download), open the file, allow the install, then grant the SMS permission when the app asks. The phone does not need to be new or fast; it needs signal and power.
+Any Android phone from 8.0 up with a SIM in it. [Download the app](/download), open the file, and allow the install. Play Protect will refuse, because the app asks for SMS permissions and does not come from Google Play: turn off *Scan apps with Play Protect* in the Play Store's Play Protect settings, install, and turn it back on. The [download page](/download) has the exact taps. The phone does not need to be new or fast; it needs signal and power.
 
 ## 3. Pair it
 
-In the dashboard, open **Phones** and choose **Pair a phone**. Scan the QR code with the app, or type the code, or open the link on the phone. Codes last ten minutes.
+In the dashboard, open **Phones** and choose **Pair a phone**. Scan the QR code with the app, or type the code, or open the link on the phone. Codes last ten minutes. Then grant the SMS permission when the app asks.
 
 Once paired, the phone checks in every 20 minutes and whenever the server pushes to it. The dashboard shows it as online, with its SIMs, battery, and network.
 

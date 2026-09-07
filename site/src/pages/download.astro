@@ -20,16 +20,17 @@ const date = m?.released_at ? new Date(m.released_at).toISOString().slice(0, 10)
   <section>
     <h2>install</h2>
     <ol>
-      <li>Open the file on the phone. Android asks once to allow installs from your browser or file manager; allow it. Play Protect may offer to scan the app first; that is fine.</li>
-      <li>Open simhook and grant the SMS permission. Phone state is optional and only lists your SIMs; notifications show sending progress and alerts.</li>
-      <li>In the dashboard, go to Phones and pair: scan the QR code, type the code, or open the link on the phone. Codes last ten minutes.</li>
+      <li>Open the file on the phone. Android asks once to allow installs from your browser or file manager; allow it.</li>
+      <li>Expect Play Protect to refuse. It blocks any app installed outside Google Play that asks for SMS permissions, and this one has to. Open the Play Store, tap your profile picture, then Play Protect, then the gear, and turn off <i>Scan apps with Play Protect</i>. Install, then turn it back on. On a Samsung phone, Auto Blocker has to be off as well, in Settings under Security and privacy.</li>
+      <li>Open simhook. In the dashboard, go to Phones and choose Pair a phone: scan the QR code, type the code, or open the link on the phone. Codes last ten minutes, so make the code once the app is installed.</li>
+      <li>Grant the SMS permission when the app asks. Phone state is optional and only lists your SIMs; notifications show sending progress and alerts.</li>
       <li>Leave the phone on Wi-Fi or mobile data with the SIM in it. Turn off battery optimisation for simhook if your phone is aggressive about background apps; the app offers the setting.</li>
     </ol>
   </section>
 
   <section>
     <h2>updates</h2>
-    <p>The app checks for a newer release twice a day and when you open it, then downloads the file, verifies its checksum, and hands it to Android's installer, which only accepts a file signed with the same key. Nothing installs without your tap.</p>
+    <p>The app checks for a newer release twice a day and when you open it, then downloads the file, verifies its checksum, and hands it to Android's installer, which only accepts a file signed with the same key. Nothing installs without your tap. If Play Protect objects to an update the way it did to the first install, the same switch applies.</p>
   </section>
 
   <section>
