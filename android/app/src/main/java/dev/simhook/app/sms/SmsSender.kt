@@ -74,9 +74,14 @@ object SmsSender {
         }
     }
 
+    /**
+     * The manager for a SIM. Naming one needs no permission; only listing
+     * them does, and that was the caller's job. A SIM that is not in the
+     * phone makes the send fail, in the open, rather than go from another.
+     */
     private fun managerFor(context: Context, subscriptionId: Int?): SmsManager {
         val system = context.getSystemService(SmsManager::class.java)
-        return if (subscriptionId != null && subscriptionId >= 0 && SimInfo.isValidSubscription(context, subscriptionId)) {
+        return if (subscriptionId != null && subscriptionId >= 0) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) system.createForSubscriptionId(subscriptionId)
             else @Suppress("DEPRECATION") SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
         } else {

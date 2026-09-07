@@ -4,8 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import dev.simhook.app.SimhookApp
-import dev.simhook.app.work.InboundUploadWorker
+import dev.simhook.app.work.ReportLedger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -14,6 +15,8 @@ import java.security.MessageDigest
 /**
  * Observes incoming SMS. The app is never the default messaging app, so it
  * only sees the broadcast; the message still lands in the inbox as usual.
+ * The text is written down before anything else happens to it, because the
+ * app has no other copy: it is not the messenger and cannot read the inbox.
  */
 class SmsReceivedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -30,9 +33,13 @@ class SmsReceivedReceiver : BroadcastReceiver() {
         val app = context.applicationContext
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val settings = SimhookApp.get(app).container.settings.current()
+                val container = SimhookApp.get(app).container
+                val settings = container.settings.current()
                 if (!settings.isPaired || !settings.receiveEnabled) return@launch
-                InboundUploadWorker.enqueue(app, sender, body, receivedAt, fingerprint, subscriptionId)
+                ReportLedger.inbound(app, container, sender, body, receivedAt, fingerprint, subscriptionId)
+            } catch (e: Exception) {
+                // A text that cannot be recorded must not take the process down with it.
+                Log.w(TAG, "recording a received text failed", e)
             } finally {
                 pending.finish()
             }
@@ -40,6 +47,8 @@ class SmsReceivedReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        private const val TAG = "SmsReceived"
+
         /** The most the API stores for one text. Longer ones are cut with a mark, not dropped. */
         const val MAX_BODY = 20_000
 

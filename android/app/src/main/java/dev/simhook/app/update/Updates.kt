@@ -71,6 +71,7 @@ object UpdateChecker {
      */
     suspend fun check(context: Context, force: Boolean): Result<AvailableUpdate?> = withContext(Dispatchers.IO) {
         val container = SimhookApp.get(context).container
+        UpdateInstaller.reconcile(context)
         val settings = container.settings.current()
         if (!force && System.currentTimeMillis() - settings.updateCheckedAt < STALE_AFTER_MS) {
             return@withContext Result.success(settings.update?.takeIf { it.versionCode > BuildConfig.VERSION_CODE })
@@ -194,6 +195,22 @@ object UpdateInstaller {
         runCatching { context.startActivity(installIntent(uri)) }
             .onFailure { Log.w(TAG, "installer launch failed", it) }
             .isSuccess
+    }
+
+    /**
+     * Catches up on a download whose completion broadcast never reached us,
+     * which is how every install by an earlier build was left: the download
+     * finished, and the app kept waiting for it. A download still running is
+     * left alone; a finished or vanished one is handled as if the broadcast
+     * had just arrived.
+     */
+    suspend fun reconcile(context: Context) = withContext(Dispatchers.IO) {
+        val settings = SimhookApp.get(context).container.settings.current()
+        val id = settings.updateDownloadId
+        if (id < 0) return@withContext
+        val dm = context.getSystemService(DownloadManager::class.java) ?: return@withContext
+        if (isRunning(dm, id)) return@withContext
+        runCatching { onDownloaded(context, id) }.onFailure { Log.w(TAG, "catching up on download $id failed", it) }
     }
 
     /** DownloadManager finished our download: verify it, then open the installer or leave a notification. */

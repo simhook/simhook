@@ -6,17 +6,18 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.SmsMessage
 import dev.simhook.app.SimhookApp
+import dev.simhook.app.outbox.OutboxDrainer
 import dev.simhook.app.outbox.OutboxMessage
-import dev.simhook.app.work.StatusReportWorker
+import dev.simhook.app.work.ReportLedger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
  * Receives the sent and delivered results the radio reports for messages
- * handed over by [SmsSender], updates the outbox, and queues the report to
- * the server. Each outbox step is one conditional update, so the parts of
- * a long text arriving together are counted once each and the message is
+ * handed over by [SmsSender], updates the outbox, and records the report
+ * for the server. Each outbox step is one conditional update, so the parts
+ * of a long text arriving together are counted once each and the message is
  * finished exactly once.
  */
 class SmsStatusReceiver : BroadcastReceiver() {
@@ -45,30 +46,30 @@ class SmsStatusReceiver : BroadcastReceiver() {
     }
 
     private suspend fun handle(context: Context, action: String, messageId: String, code: Int, radioError: Int?, pduStatus: Int?) {
-        val dao = SimhookApp.get(context).container.outbox
+        val container = SimhookApp.get(context).container
+        val dao = container.outbox
         val now = System.currentTimeMillis()
         when (action) {
             SmsSender.ACTION_SENT -> {
                 if (code == Activity.RESULT_OK) {
                     if (dao.partOk(messageId, now) > 0 && dao.completeIfAllParts(messageId, now) > 0) {
-                        StatusReportWorker.enqueue(context, messageId, "sent", now, null, null)
+                        ReportLedger.status(context, container, messageId, "sent", now, null, null)
                         SendTracker.complete(messageId, true)
                     }
                 } else {
-                    val failure = SmsErrors.forSentResult(code, radioError)
-                    if (dao.finish(messageId, OutboxMessage.STATE_FAILED, now, failure.message) > 0) {
-                        StatusReportWorker.enqueue(context, messageId, "failed", now, failure.code, failure.message)
-                        SendTracker.complete(messageId, false)
-                    }
+                    // A passing condition sends the message back to the queue;
+                    // only a real refusal, or a spent retry budget, is a failure.
+                    OutboxDrainer.settle(context, container, messageId, now, SmsErrors.forSentResult(code, radioError))
+                    SendTracker.complete(messageId, false)
                 }
             }
             SmsSender.ACTION_DELIVERED -> when (SmsErrors.classifyDelivery(code, pduStatus)) {
-                SmsErrors.DeliveryOutcome.Delivered -> StatusReportWorker.enqueue(context, messageId, "delivered", now, null, null)
+                SmsErrors.DeliveryOutcome.Delivered -> ReportLedger.status(context, container, messageId, "delivered", now, null, null)
                 SmsErrors.DeliveryOutcome.Pending -> Unit
                 SmsErrors.DeliveryOutcome.Failed -> {
                     val failure = SmsErrors.deliveryFailure(code, pduStatus)
                     dao.setState(messageId, OutboxMessage.STATE_FAILED, now, failure.message)
-                    StatusReportWorker.enqueue(context, messageId, "failed", now, failure.code, failure.message)
+                    ReportLedger.status(context, container, messageId, "failed", now, failure.code, failure.message)
                 }
             }
         }

@@ -13,6 +13,7 @@ import dev.simhook.app.core.SettingsStore
 import dev.simhook.app.gateway.GatewayService
 import dev.simhook.app.outbox.AppDatabase
 import dev.simhook.app.outbox.OutboxDao
+import dev.simhook.app.outbox.ReportDao
 import dev.simhook.app.update.UpdateScheduler
 import dev.simhook.app.work.HeartbeatScheduler
 import dev.simhook.app.work.notifyPairingLost
@@ -50,6 +51,7 @@ class AppContainer(private val context: Context) {
     val settings = SettingsStore(context)
     val secure = SecureStore(context)
     val outbox: OutboxDao = AppDatabase.get(context).outbox()
+    val reports: ReportDao = AppDatabase.get(context).reports()
     val api = ApiClient(
         baseUrl = { settings.current().apiBaseUrl },
         deviceToken = { secure.get(SecureStore.DEVICE_TOKEN) },
@@ -58,8 +60,9 @@ class AppContainer(private val context: Context) {
 
     /** Exchanges a pairing code for a device record and token. */
     suspend fun pair(code: String, apiBaseUrl: String, pushToken: String?): Device {
-        // Whatever an earlier pairing left behind is not this account's to send.
+        // Whatever an earlier pairing left behind is not this account's to send or to tell.
         outbox.clear()
+        reports.clear()
         settings.setApiBaseUrl(apiBaseUrl)
         val current = settings.current()
         val response = api.pair(
@@ -121,6 +124,7 @@ class AppContainer(private val context: Context) {
         GatewayService.stop(context)
         secure.remove(SecureStore.DEVICE_TOKEN)
         outbox.clear()
+        reports.clear()
         settings.clearPairing()
     }
 

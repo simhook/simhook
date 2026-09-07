@@ -3,10 +3,10 @@ package dev.simhook.app.work
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
@@ -30,11 +30,14 @@ import dev.simhook.app.core.TelemetryCollector
 import dev.simhook.app.gateway.GatewayService
 import dev.simhook.app.outbox.OutboxDrainer
 import dev.simhook.app.outbox.OutboxMessage
+import dev.simhook.app.outbox.PendingReport
 import dev.simhook.app.push.Push
 import dev.simhook.app.sms.SimInfo
 import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "Workers"
 
 private val networkConstraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
@@ -78,6 +81,8 @@ object OutboxSync {
                 },
             )
         }
+        // The server is reachable: anything owed to it goes now.
+        ReportUploader.flush(container)
         val pending = container.outbox.pendingCount()
         if (pending > 0) GatewayService.startOrDrain(context)
         return pending
@@ -121,14 +126,15 @@ class OutboxSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
 /**
  * Sends the outbox from a worker when the system refused to start the
  * foreground service. Bounded, because expedited work has a budget; what
- * is left queues another run.
+ * is left queues another run behind this one. When the service is already
+ * sending, the worker leaves the queue to it.
  */
 class OutboxDrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Sending messages")
 
     override suspend fun doWork(): Result {
         val container = SimhookApp.get(applicationContext).container
-        val remaining = OutboxDrainer.drain(applicationContext, container, deadlineMillis = System.currentTimeMillis() + BUDGET_MS) {}
+        val remaining = OutboxDrainer.drain(applicationContext, container, deadlineMillis = System.currentTimeMillis() + BUDGET_MS, waitForTurn = false) {}
         if (remaining) enqueue(applicationContext, expedited = false)
         return Result.success()
     }
@@ -140,7 +146,9 @@ class OutboxDrainWorker(context: Context, params: WorkerParameters) : CoroutineW
             val builder = OneTimeWorkRequestBuilder<OutboxDrainWorker>()
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
             if (expedited) builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            WorkManager.getInstance(context).enqueueUniqueWork("outbox-drain", ExistingWorkPolicy.KEEP, builder.build())
+            // Appended, never kept: a continuation is enqueued from inside the
+            // running run, which a keep policy would silently discard.
+            WorkManager.getInstance(context).enqueueUniqueWork("outbox-drain", ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
         }
     }
 }
@@ -171,8 +179,10 @@ class HeartbeatWorker(context: Context, params: WorkerParameters) : CoroutineWor
             container.applyServerDevice(device)
             container.settings.setLastHeartbeat(System.currentTimeMillis())
             if (token != null) container.settings.setPushToken(token)
-            // A check-in also picks up anything waiting to be sent, so a phone
-            // that missed a push still sends within one interval.
+            // A check-in also settles what the phone owes and picks up anything
+            // waiting to be sent, so a phone that missed a push still sends
+            // within one interval and a report never waits longer than one.
+            runCatching { ReportUploader.flush(container) }
             runCatching { OutboxSync.run(applicationContext, container) }
             Result.success()
         } catch (e: ApiException) {
@@ -217,99 +227,138 @@ object HeartbeatScheduler {
 }
 
 // ---------------------------------------------------------------------------
-// Status reports
+// What the phone owes the server
 // ---------------------------------------------------------------------------
 
-class StatusReportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val id = inputData.getString(KEY_ID) ?: return Result.failure()
-        val status = inputData.getString(KEY_STATUS) ?: return Result.failure()
-        val at = inputData.getLong(KEY_AT, System.currentTimeMillis())
-        val report = StatusReport(
-            status = status,
-            at = iso(at),
-            errorCode = inputData.getString(KEY_CODE),
-            errorMessage = inputData.getString(KEY_MESSAGE),
+/**
+ * The ledger of reports the server has not taken yet. Every status and
+ * every received text is written here first and uploaded from here, so
+ * neither depends on the network being up at the moment it happened. The
+ * upload is tried at once, again with backoff while it fails, and at every
+ * check-in and outbox fetch regardless.
+ */
+object ReportLedger {
+    suspend fun status(context: Context, container: AppContainer, messageId: String, status: String, at: Long, code: String?, message: String?) {
+        container.reports.insert(
+            PendingReport(kind = PendingReport.KIND_STATUS, messageId = messageId, status = status, errorCode = code, errorMessage = message, at = at, createdAt = System.currentTimeMillis()),
         )
-        val container = SimhookApp.get(applicationContext).container
-        return try {
-            container.api.reportStatus(id, report)
-            Result.success()
-        } catch (e: ApiException) {
-            if (e.isAuthFailure) container.handleLostPairing()
-            retryOrFail(e, runAttemptCount, 8)
-        } catch (e: IOException) {
-            retryOrFail(e, runAttemptCount, 8)
+        ReportUploadWorker.enqueue(context)
+    }
+
+    suspend fun inbound(context: Context, container: AppContainer, sender: String, body: String, receivedAt: Long, fingerprint: String, sim: Int?) {
+        container.reports.insert(
+            PendingReport(
+                kind = PendingReport.KIND_INBOUND, sender = sender, body = body, fingerprint = fingerprint, simSubscriptionId = sim,
+                at = receivedAt, createdAt = System.currentTimeMillis(),
+            ),
+        )
+        ReportUploadWorker.enqueue(context)
+    }
+}
+
+/** Uploads the ledger, oldest first. */
+object ReportUploader {
+    private const val PAGE = 50
+
+    /**
+     * Sends what it can and returns true when the ledger is empty. A report
+     * the server refuses outright is dropped, since it will never take it;
+     * anything else stops the run and waits for the next.
+     */
+    suspend fun flush(container: AppContainer): Boolean {
+        val dao = container.reports
+        while (true) {
+            val batch = dao.oldest(PAGE)
+            if (batch.isEmpty()) return true
+            for (r in batch) {
+                try {
+                    send(container, r)
+                    dao.delete(r.id)
+                } catch (e: ApiException) {
+                    if (e.isAuthFailure) {
+                        // The pairing is gone, and with it everything owed under it.
+                        container.handleLostPairing()
+                        return true
+                    }
+                    if (e.status in 400..499 && e.status != 408 && e.status != 429) {
+                        Log.w(TAG, "report ${r.id} (${r.kind}) refused by the server: ${e.code}")
+                        dao.delete(r.id)
+                        continue
+                    }
+                    dao.bump(r.id)
+                    return false
+                } catch (e: IOException) {
+                    dao.bump(r.id)
+                    return false
+                }
+            }
         }
     }
 
-    companion object {
-        private const val KEY_ID = "id"
-        private const val KEY_STATUS = "status"
-        private const val KEY_AT = "at"
-        private const val KEY_CODE = "code"
-        private const val KEY_MESSAGE = "message"
-
-        fun enqueue(context: Context, messageId: String, status: String, at: Long, code: String?, message: String?) {
-            val data = workDataOf(KEY_ID to messageId, KEY_STATUS to status, KEY_AT to at, KEY_CODE to code, KEY_MESSAGE to message)
-            val request = OneTimeWorkRequestBuilder<StatusReportWorker>()
-                .setInputData(data)
-                .setConstraints(networkConstraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("status-$messageId-$status", ExistingWorkPolicy.KEEP, request)
+    private suspend fun send(container: AppContainer, r: PendingReport) {
+        when (r.kind) {
+            PendingReport.KIND_STATUS -> container.api.reportStatus(
+                r.messageId ?: return,
+                StatusReport(status = r.status ?: return, at = iso(r.at), errorCode = r.errorCode, errorMessage = r.errorMessage),
+            )
+            PendingReport.KIND_INBOUND -> container.api.reportInbound(
+                InboundReport(r.sender ?: return, r.body ?: return, iso(r.at), r.fingerprint ?: return, r.simSubscriptionId),
+            )
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Inbound uploads
-// ---------------------------------------------------------------------------
-
-class InboundUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Forwarding a received text")
+class ReportUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo = syncForeground(applicationContext, "Reporting to the server")
 
     override suspend fun doWork(): Result {
-        val sender = inputData.getString(KEY_SENDER) ?: return Result.failure()
-        val body = inputData.getString(KEY_BODY) ?: return Result.failure()
-        val receivedAt = inputData.getLong(KEY_RECEIVED_AT, System.currentTimeMillis())
-        val fingerprint = inputData.getString(KEY_FINGERPRINT) ?: return Result.failure()
-        val sim = inputData.getInt(KEY_SIM, -1).takeIf { it >= 0 }
         val container = SimhookApp.get(applicationContext).container
-        return try {
-            container.api.reportInbound(InboundReport(sender, body, iso(receivedAt), fingerprint, sim))
-            Result.success()
-        } catch (e: ApiException) {
-            if (e.isAuthFailure) container.handleLostPairing()
-            retryOrFail(e, runAttemptCount, 10)
-        } catch (e: IOException) {
-            retryOrFail(e, runAttemptCount, 10)
-        }
+        if (!container.settings.current().isPaired) return Result.success()
+        // Never a failure: what is owed stays owed. The backoff grows while
+        // the server is away, and the next check-in tries regardless.
+        return if (ReportUploader.flush(container)) Result.success() else Result.retry()
     }
 
     companion object {
-        private const val KEY_SENDER = "sender"
-        private const val KEY_BODY = "body"
-        private const val KEY_RECEIVED_AT = "received_at"
-        private const val KEY_FINGERPRINT = "fingerprint"
-        private const val KEY_SIM = "sim"
-
-        fun enqueue(context: Context, sender: String, body: String, receivedAt: Long, fingerprint: String, sim: Int?) {
-            val data = Data.Builder()
-                .putString(KEY_SENDER, sender)
-                .putString(KEY_BODY, body)
-                .putLong(KEY_RECEIVED_AT, receivedAt)
-                .putString(KEY_FINGERPRINT, fingerprint)
-                .putInt(KEY_SIM, sim ?: -1)
-                .build()
-            val request = OneTimeWorkRequestBuilder<InboundUploadWorker>()
-                .setInputData(data)
+        fun enqueue(context: Context) {
+            val request = OneTimeWorkRequestBuilder<ReportUploadWorker>()
                 .setConstraints(networkConstraints)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("inbound-$fingerprint", ExistingWorkPolicy.KEEP, request)
+            // One uploader at a time; a run in progress reads the ledger again
+            // before it finishes, so a report added meanwhile goes with it.
+            WorkManager.getInstance(context).enqueueUniqueWork("report-upload", ExistingWorkPolicy.KEEP, request)
         }
+    }
+}
+
+/**
+ * Kept for work an earlier build left enqueued: its reports move into the
+ * ledger instead of being sent from here.
+ */
+class StatusReportWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val id = inputData.getString("id") ?: return Result.failure()
+        val status = inputData.getString("status") ?: return Result.failure()
+        val container = SimhookApp.get(applicationContext).container
+        ReportLedger.status(applicationContext, container, id, status, inputData.getLong("at", System.currentTimeMillis()), inputData.getString("code"), inputData.getString("message"))
+        return Result.success()
+    }
+}
+
+/** Kept for work an earlier build left enqueued; see [StatusReportWorker]. */
+class InboundUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val sender = inputData.getString("sender") ?: return Result.failure()
+        val body = inputData.getString("body") ?: return Result.failure()
+        val fingerprint = inputData.getString("fingerprint") ?: return Result.failure()
+        val container = SimhookApp.get(applicationContext).container
+        ReportLedger.inbound(
+            applicationContext, container, sender, body, inputData.getLong("received_at", System.currentTimeMillis()), fingerprint,
+            inputData.getInt("sim", -1).takeIf { it >= 0 },
+        )
+        return Result.success()
     }
 }
 

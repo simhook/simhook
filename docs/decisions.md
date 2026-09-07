@@ -204,6 +204,8 @@ The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: t
 
 **Rules out:** Message content in a push; `dispatched` meaning anything but "the phone has fetched it".
 
+*Amended 2026-09-07 by 022: the sweep leaves a phone that is still reporting alone, expected send times account for the segment ceiling and the radio's acknowledgement, and a phone that cannot be pushed keeps its messages for its next check-in rather than failing them.*
+
 ## 019. The mark and the brand pipeline
 
 **Date:** 2026-09-06
@@ -230,4 +232,17 @@ The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: t
 **Why:** A merchant of record takes on VAT and sales-tax registration everywhere, which a one-person company cannot do, and works without a payment processor's presence in the founder's country. Polar sells only software, lists the founder's country for payouts, and has a free year for startups. Keeping the plans table and limit checks ours means the provider can be swapped by rewriting one package. The rehearsal path exists because a checkout is the one flow that cannot be tested with a fake.
 
 **Rules out:** A processor that needs a company where there is none; storing card data; per-message billing; trusting a checkout's return page (the webhook and a fetch of the subscription are what change a plan); a second live subscription per account.
+
+## 022. The phone reports only what it saw, and the server believes it
+
+**Date:** 2026-09-07
+**Decision:** Sending is paced by segment, not by message. The phone keeps a rolling window under the platform's ceiling for an app that is not the messenger (30 segments in 60 seconds by default, read from the phone's own settings) and waits before handing the radio anything that would cross it, on top of the owner's delay. The server models the same when it stamps expected send times: the delay plus an acknowledgement allowance (`SIMHOOK_SEND_ACK_SECONDS`), or the segment ceiling for a text of that size, whichever is longer. The stale sweep tells a slow phone from a silent one by when it last reported on any message (`devices.last_report_at`): a phone that is still reporting is behind, not gone, and its overdue messages wait until a day has passed.
+
+The phone reports `failed` only for a refusal it observed. A condition of the moment (the platform's rate limit, no service, a radio that is off or busy) puts the message back in its queue with a growing cool-off and a retry budget, and only a message none of whose parts went out is retried. A radio that says nothing keeps the message as `awaiting`, off the sending loop, for ten minutes before it is reported `failed` with the code `interrupted`, which the server treats as a guess: a later `sent` or `delivered` overturns it, on the phone and on the server. A missing SMS permission touches nothing and tells the owner. One sending loop runs at a time, and a message is claimed in one conditional update before the radio gets it.
+
+Everything the phone owes the server, a status or a received text, is written to a ledger table first and uploaded from it: at once, again with backoff, and at every check-in and outbox fetch, until the server has taken it or refused it outright. A received text exists nowhere else, so it never rides in a work request. A phone that cannot be woken by push is not a failure: it fetches its outbox at its next check-in and the messages wait for that, up to the push's lifetime, as they would for a phone that is away; a server without Firebase is a supported setting.
+
+**Why:** The first real batch of long text would have crossed the platform's segment ceiling, which does not fail the send but puts a dialog on a phone nobody is holding, and the expected send times were so optimistic that the sweep would have called a working phone silent after a few hundred messages. The phone turned three recoverable conditions into `failed` reports the truth could not overturn, could hand one message to the radio twice, and dropped a status after twenty minutes without a network and a received text with it. Each of those makes the dashboard say something that did not happen, which is the one thing an SMS gateway must not do.
+
+**Rules out:** A `failed` report for anything the carrier did not refuse; pacing by message count alone; failing a message because a push could not be sent; a report or a received text held only in memory or in a work request; a second sending loop.
 

@@ -24,6 +24,7 @@ object Notifications {
     const val ID_SYNC = 3
     const val ID_UPDATE_AVAILABLE = 4
     const val ID_UPDATE_READY = 5
+    const val ID_ALERT_PERMISSION = 6
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return

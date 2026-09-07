@@ -87,10 +87,12 @@
             </intent-filter>
         </receiver>
 
-        <!-- The download manager addresses its completion broadcast to this app, so nobody else needs to reach the receiver. -->
+        <!-- The download manager's completion broadcast comes from the system, not from this app, and the
+             framework drops a broadcast from another uid at a receiver that is not exported. The broadcast is
+             addressed to this package alone, and the receiver acts only on the download id it started. -->
         <receiver
             android:name=".update.UpdateDownloadReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>

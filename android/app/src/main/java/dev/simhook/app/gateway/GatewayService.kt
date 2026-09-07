@@ -59,7 +59,8 @@ class GatewayService : Service() {
 
     private suspend fun drain() {
         val container = SimhookApp.get(this).container
-        OutboxDrainer.drain(this, container, deadlineMillis = null) { remaining ->
+        // A worker may be mid-way through the queue; the service takes over when it is done.
+        OutboxDrainer.drain(this, container, deadlineMillis = null, waitForTurn = true) { remaining ->
             showNotification("Sending messages", if (remaining == 1) "1 message in the queue" else "$remaining messages in the queue")
         }
         val settings = container.settings.current()

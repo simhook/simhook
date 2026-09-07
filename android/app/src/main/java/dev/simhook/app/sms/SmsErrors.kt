@@ -43,6 +43,16 @@ object SmsErrors {
         return if (radioError != null && radioError > 0) base.copy(message = "${base.message} (radio code $radioError)") else base
     }
 
+    /**
+     * Whether a send failure is a condition of the moment rather than a
+     * verdict on the message: the platform's own rate limit, no signal, a
+     * radio that is off or busy. Such a message is tried again later; only
+     * a spent retry budget makes it a failure.
+     */
+    fun isTransient(code: String): Boolean = code in transientCodes
+
+    private val transientCodes = setOf("rate_limited", "no_service", "radio_off", "radio_unavailable", "network_error", "phone_busy", "phone_error")
+
     enum class DeliveryOutcome { Delivered, Pending, Failed }
 
     /**
