@@ -372,7 +372,7 @@ function BillingPage() {
                   {list.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell>{limitLabel(p.daily_limit)}</TableCell>
+                      <TableCell>{p.daily_limit < 0 ? "no cap" : formatCount(p.daily_limit)}</TableCell>
                       <TableCell>{limitLabel(p.monthly_limit)}</TableCell>
                       <TableCell>{limitLabel(p.batch_limit)}</TableCell>
                       <TableCell>{limitLabel(p.device_limit)}</TableCell>

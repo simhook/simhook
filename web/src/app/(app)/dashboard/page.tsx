@@ -29,7 +29,7 @@ function UsageLine({ label, used, limit }: { label: string; used: number; limit:
       <div className="flex justify-between text-sm">
         <span>{label}</span>
         <span className="tabular-nums text-muted-foreground">
-          {formatCount(used)} {unlimited ? "sent, unlimited" : `of ${formatCount(limit)}`}
+          {formatCount(used)} {unlimited ? "sent" : `of ${formatCount(limit)}`}
         </span>
       </div>
       {!unlimited ? (
