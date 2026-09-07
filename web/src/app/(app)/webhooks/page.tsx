@@ -55,7 +55,7 @@ function EndpointsTab({ onAdd, onEdit }: { onAdd: () => void; onEdit: (w: Webhoo
           <li key={w.id} className="grid gap-2 border-b py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium">{w.name || "Unnamed endpoint"}</p>
+                <p className="break-words font-medium">{w.name || "Unnamed endpoint"}</p>
                 <p className="truncate font-mono text-xs text-muted-foreground">{w.url}</p>
               </div>
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -270,7 +270,7 @@ function DeliveriesTab() {
                   {selected.http_status ? `, HTTP ${selected.http_status}` : ""}, {selected.attempt_count} attempt{selected.attempt_count === 1 ? "" : "s"}
                 </DialogDescription>
               </DialogHeader>
-              {selected.error ? <p className="text-sm text-destructive">{selected.error}</p> : null}
+              {selected.error ? <p className="break-words text-sm text-destructive">{selected.error}</p> : null}
               <p className="font-mono text-xs text-muted-foreground">payload</p>
               <pre className="max-h-72 overflow-auto border bg-secondary p-3 font-mono text-xs">{JSON.stringify(selected.payload, null, 2)}</pre>
               {selected.response_excerpt ? (

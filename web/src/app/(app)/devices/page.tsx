@@ -47,7 +47,7 @@ export default function DevicesPage() {
             const about = [[d.brand, d.model].filter(Boolean).join(" "), d.os_version ? `Android ${d.os_version}` : ""].filter(Boolean);
             return (
               <li key={d.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b py-3.5">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 break-words">
                   <div className="flex flex-wrap items-center gap-3">
                     <Link href={`/devices/${d.id}`} className="font-medium hover:underline">
                       {d.name}

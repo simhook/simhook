@@ -55,9 +55,9 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
                 <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} /> {deviceName ? `, ${deviceName}` : ""}
               </DialogDescription>
             </DialogHeader>
-            <p className="whitespace-pre-wrap border-l-2 border-border pl-4 text-sm">{m.body}</p>
+            <p className="whitespace-pre-wrap break-words border-l-2 border-border pl-4 text-sm">{m.body}</p>
             {m.error_message ? (
-              <p className="text-sm text-destructive">
+              <p className="break-words text-sm text-destructive">
                 {m.error_code ? <span className="font-mono">{m.error_code}: </span> : null}
                 {m.error_message}
               </p>
@@ -90,7 +90,7 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
               ) : null}
               <div className="contents">
                 <dt className="text-muted-foreground">Message id</dt>
-                <dd className="font-mono text-xs">{m.id}</dd>
+                <dd className="font-mono text-xs break-all">{m.id}</dd>
               </div>
             </dl>
           </>

@@ -173,7 +173,7 @@ export default function DevicePage() {
       <div className="mb-6 mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
+            <h1 className="break-words text-2xl font-semibold tracking-tight">{d.name}</h1>
             {d.is_default ? <span className="font-mono text-[11px] text-muted-foreground">default</span> : null}
             {!d.enabled ? <span className="font-mono text-[11px] text-muted-foreground">disabled</span> : null}
           </div>
