@@ -246,6 +246,7 @@ type PolarSubscription struct {
 	EndedAt            *time.Time     `json:"ended_at"`
 	CustomerID         string         `json:"customer_id"`
 	ProductID          string         `json:"product_id"`
+	CheckoutID         *string        `json:"checkout_id"`
 	Amount             int64          `json:"amount"`
 	Currency           string         `json:"currency"`
 	Metadata           map[string]any `json:"metadata"`
@@ -273,6 +274,23 @@ func (p *Polar) GetSubscription(ctx context.Context, id string) (PolarSubscripti
 	var out PolarSubscription
 	err := p.do(ctx, http.MethodGet, "/v1/subscriptions/"+id, nil, nil, &out)
 	return out, err
+}
+
+// ListSubscriptions returns every subscription of the customer bound to
+// our account id, live or ended.
+func (p *Polar) ListSubscriptions(ctx context.Context, externalCustomerID string) ([]PolarSubscription, error) {
+	var all []PolarSubscription
+	for page := 1; ; page++ {
+		q := url.Values{"limit": {"100"}, "page": {strconv.Itoa(page)}, "external_customer_id": {externalCustomerID}}
+		var out listPage[PolarSubscription]
+		if err := p.do(ctx, http.MethodGet, "/v1/subscriptions/", q, nil, &out); err != nil {
+			return nil, err
+		}
+		all = append(all, out.Items...)
+		if page >= out.Pagination.MaxPage {
+			return all, nil
+		}
+	}
 }
 
 // UpdateSubscription applies a change: a new product with a proration

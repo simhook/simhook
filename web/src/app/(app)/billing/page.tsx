@@ -32,6 +32,13 @@ function CheckoutReturn({ id, onDone }: { id: string; onDone: () => void }) {
   const state = useCheckoutState(id);
   const session = useSession();
   const announced = useRef(false);
+  // After a while the wait is no longer worth a spinner: the webhook
+  // finishes the job on its own, and the reader may go on.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 45_000);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     const d = state.data;
     if (!d || announced.current) return;
@@ -50,6 +57,16 @@ function CheckoutReturn({ id, onDone }: { id: string; onDone: () => void }) {
     return (
       <p className="mb-6 border-l-2 border-destructive pl-4 text-sm">
         <span className="text-destructive">{errorMessage(state.error)}</span>{" "}
+        <button type="button" className="underline" onClick={onDone}>
+          Dismiss
+        </button>
+      </p>
+    );
+  }
+  if (slow) {
+    return (
+      <p className="mb-6 border-l-2 border-foreground pl-4 text-sm">
+        <span className="font-medium">Still confirming.</span> The plan updates on its own once Polar reports the payment.{" "}
         <button type="button" className="underline" onClick={onDone}>
           Dismiss
         </button>

@@ -281,22 +281,50 @@ func (s *Service) CheckoutState(ctx context.Context, user store.User, checkoutID
 		return CheckoutResult{}, store.ErrNotFound
 	}
 	out := CheckoutResult{Status: ck.Status}
-	if ck.Status != "succeeded" || ck.SubscriptionID == nil {
+	if ck.Status != "succeeded" {
 		return out, nil
 	}
-	sub, err := s.polar.GetSubscription(ctx, *ck.SubscriptionID)
+	sub, err := s.subscriptionFromCheckout(ctx, user, ck)
 	if err != nil {
-		return out, providerErr(err)
-	}
-	if err := s.applySubscription(ctx, sub); err != nil {
 		return out, err
+	}
+	if sub != nil {
+		if err := s.applySubscription(ctx, *sub); err != nil {
+			return out, err
+		}
 	}
 	live, err := s.liveSubscription(ctx, user.ID)
 	if err != nil {
 		return out, err
 	}
-	out.Applied = live != nil && live.ProviderSubscriptionID != nil && *live.ProviderSubscriptionID == sub.ID
+	managed := live != nil && live.Provider != nil && store.SubscriptionLive(live.Status)
+	out.Applied = managed && (sub == nil || (live.ProviderSubscriptionID != nil && *live.ProviderSubscriptionID == sub.ID))
 	return out, nil
+}
+
+// subscriptionFromCheckout finds the subscription a paid checkout
+// produced. Polar does not write it on the checkout (that field names a
+// subscription a checkout upgrades), but every subscription names the
+// checkout that created it, so the account's subscriptions are listed
+// and matched. Nil when Polar has not created it yet.
+func (s *Service) subscriptionFromCheckout(ctx context.Context, user store.User, ck PolarCheckout) (*PolarSubscription, error) {
+	if ck.SubscriptionID != nil {
+		sub, err := s.polar.GetSubscription(ctx, *ck.SubscriptionID)
+		if err != nil {
+			return nil, providerErr(err)
+		}
+		return &sub, nil
+	}
+	subs, err := s.polar.ListSubscriptions(ctx, user.ID.String())
+	if err != nil {
+		return nil, providerErr(err)
+	}
+	for i := range subs {
+		if subs[i].CheckoutID != nil && *subs[i].CheckoutID == ck.ID {
+			return &subs[i], nil
+		}
+	}
+	return nil, nil
 }
 
 // ChangePlan moves a live subscription to another plan or interval. A
