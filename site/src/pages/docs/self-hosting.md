@@ -12,7 +12,7 @@ Everything that runs simhook.dev is in the [repository](https://github.com/simho
 
 - A Linux host with 2 CPUs and 4 GB of memory (a Hetzner CX22 or similar) with ports 22, 80, and 443 open.
 - A domain on Cloudflare, and an API token with `Zone: DNS: Edit` on it. Caddy uses it to obtain certificates through the DNS challenge, so the proxy can stay on.
-- A Firebase project with Cloud Messaging, for pushes to the phones. The service account JSON is the only secret the phones' side needs.
+- Optionally, a Firebase project with Cloud Messaging, for pushes to the phones; without one they send at their next check-in instead of at once. The service account JSON is the only secret the phones' side needs.
 - SMTP credentials from a transactional email provider, for sign-up and password emails.
 
 ## Steps
@@ -23,7 +23,7 @@ git clone https://github.com/simhook/simhook.git /opt/simhook
 cd /opt/simhook/deploy
 cp .env.example .env          # domains, Cloudflare token, database password
 cp api.env.example api.env    # secret key, SMTP
-mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
+mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json   # or leave FCM_CREDENTIALS_FILE empty in .env
 chown 10001:10001 secrets/fcm.json && chmod 400 secrets/fcm.json
 docker compose -f docker-compose.prod.yaml up -d --build
 ```

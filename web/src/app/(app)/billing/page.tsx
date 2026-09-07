@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Plan } from "@simhook/contracts";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { LoadError, PageHeader, textLink } from "@/components/page-header";
 import { useAccount, useSession } from "@/components/session-provider";
 import { errorMessage } from "@/lib/api";
 import { absoluteDate, formatCount, limitLabel, priceLabel } from "@/lib/format";
-import { useBilling, useBillingMutations, useCheckoutState, usePlans, type BillingStatus } from "@/lib/queries";
+import { keys, useBilling, useBillingMutations, useCheckoutState, usePlans, type BillingStatus } from "@/lib/queries";
 
 type Interval = "month" | "year";
 type Sub = NonNullable<BillingStatus["subscription"]>;
@@ -55,6 +56,7 @@ function planFacts(p: Plan) {
 function CheckoutReturn({ id, onDone }: { id: string; onDone: () => void }) {
   const state = useCheckoutState(id);
   const session = useSession();
+  const qc = useQueryClient();
   const announced = useRef(false);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -67,6 +69,9 @@ function CheckoutReturn({ id, onDone }: { id: string; onDone: () => void }) {
     if (d.applied) {
       announced.current = true;
       toast.success("Your plan is active.");
+      // The plan and the limits both changed; the page must not keep
+      // showing the old plan with a button that would buy it again.
+      void qc.invalidateQueries({ queryKey: keys.billing });
       void session.refresh();
       onDone();
     } else if (d.status === "expired" || d.status === "failed") {
@@ -74,7 +79,7 @@ function CheckoutReturn({ id, onDone }: { id: string; onDone: () => void }) {
       toast.error(d.status === "expired" ? "The checkout expired before it was paid." : "The payment did not go through.");
       onDone();
     }
-  }, [state.data, session, onDone]);
+  }, [state.data, session, qc, onDone]);
   if (state.isError) {
     return (
       <p className="mb-6 border-l-2 border-destructive pl-4 text-sm">
@@ -109,6 +114,13 @@ function statusSentence(sub: Sub | null, plans: Plan[]): string {
   const when = absoluteDate(sub.current_period_end);
   if (!sub.managed) return head;
   if (sub.status === "past_due") return `${head} The last payment failed and Polar is retrying your card.`;
+  // A subscription the provider holds open without granting the plan: a
+  // payment still being confirmed, or a pause. The account is on Free.
+  if (!isLive(sub.status)) {
+    return sub.status === "incomplete"
+      ? `${head} Polar is still confirming the payment; until it does, your account is on Free. If it fails, this page lets you try again.`
+      : `${head} Not active (${sub.status.replace(/_/g, " ")}), so your account is on Free.`;
+  }
   if (sub.cancel_at_period_end) return `${head} Ends on ${when || "the period end"}. After that, Free.`;
   if (sub.pending) {
     const target = plans.find((p) => p.id === sub.pending?.plan_id);
@@ -199,7 +211,8 @@ function BillingPage() {
 
   const status = billing.data;
   const sub = status?.subscription ?? null;
-  const managed = !!sub?.managed && isLive(sub.status);
+  const live = !!sub && isLive(sub.status);
+  const managed = !!sub?.managed && live;
   const list = plans.data?.data ?? [];
 
   // The period follows the subscription until the reader changes it.
@@ -266,10 +279,13 @@ function BillingPage() {
       onError: (e) => toast.error(errorMessage(e)),
     });
 
-  // What the action column shows for a plan, given the period chosen.
+  // What the action column shows for a plan, given the period chosen. A
+  // subscription that grants nothing yet leaves the account on Free, and
+  // the API refuses a second checkout while it is open, so no buy button
+  // appears for it either.
   const action = (p: Plan) => {
     const paid = p.monthly_price_cents > 0;
-    const currentRow = sub ? sub.plan_id === p.id && (!sub.managed || asInterval(sub.interval) === interval) : !paid;
+    const currentRow = sub && live ? sub.plan_id === p.id && (!sub.managed || asInterval(sub.interval) === interval) : !paid;
     if (currentRow) return <span className="text-muted-foreground">Current plan</span>;
     if (sub?.pending && sub.pending.plan_id === p.id && asInterval(sub.pending.interval) === interval) {
       return <span className="text-muted-foreground">Starts {absoluteDate(sub.pending.at)}</span>;

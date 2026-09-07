@@ -45,7 +45,7 @@ const schema = [webPage({ url: "/changelog", title: "Changelog", ...(newest ? { 
           <p class="meta">
             <time datetime={r.published_at}>{day(r.published_at)}</time>, <a href={r.html_url}>GitHub release</a>{r.prerelease ? ", pre-release" : ""}
           </p>
-          {paragraphs(r.body).map((p) => (p.startsWith("SHA-256:") ? <p class="meta">{p}</p> : <p>{p}</p>))}
+          {paragraphs(r.body).map((p) => (p.startsWith("SHA-256:") ? <p class="meta digest">{p}</p> : <p>{p}</p>))}
         </>
       ))}
     </section>

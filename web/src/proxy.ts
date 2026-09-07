@@ -37,6 +37,7 @@ export const config = {
     "/sends/:path*",
     "/webhooks/:path*",
     "/api-keys/:path*",
+    "/billing/:path*",
     "/settings/:path*",
     "/verify-email",
   ],

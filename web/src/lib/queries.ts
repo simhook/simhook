@@ -289,7 +289,8 @@ export type MessageFilter = {
   to?: string;
 };
 
-export function useMessages(filter: MessageFilter, limit = 50) {
+/** Pages of messages, newest first. They refresh on their own unless told the list is settled. */
+export function useMessages(filter: MessageFilter, limit = 50, live = true) {
   return useInfiniteQuery({
     queryKey: keys.messages(filter, limit),
     queryFn: ({ pageParam }) =>
@@ -306,7 +307,7 @@ export function useMessages(filter: MessageFilter, limit = 50) {
       ),
     initialPageParam: "",
     getNextPageParam: (last) => last.next_cursor || undefined,
-    refetchInterval: 10_000,
+    refetchInterval: live ? 10_000 : false,
   });
 }
 
@@ -334,10 +335,15 @@ export function batchLive(status: string | undefined): boolean {
   return status === undefined || status === "queued" || status === "processing";
 }
 
+/**
+ * A send and its counters, asked again every few seconds while it moves.
+ * The recipients are not in the answer: a send can be thousands of
+ * messages, and the page lists them through useMessages instead.
+ */
 export function useBatch(id: string) {
   return useQuery({
     queryKey: keys.batch(id),
-    queryFn: () => unwrap(api.GET("/v1/batches/{id}", { params: { path: { id } } })),
+    queryFn: () => unwrap(api.GET("/v1/batches/{id}", { params: { path: { id }, query: { messages: false } } })),
     enabled: !!id,
     refetchInterval: (q) => (batchLive(q.state.data?.batch.status) ? 3_000 : false),
   });

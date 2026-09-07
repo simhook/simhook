@@ -8,13 +8,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LoadError, textLink } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { absoluteTime, batchStatusLabel, messageStatusLabel, relativeTime } from "@/lib/format";
-import { batchLive, useBatch, useDevices } from "@/lib/queries";
+import { batchLive, useBatch, useDevices, useMessages } from "@/lib/queries";
 
 export default function SendPage() {
   const { id } = useParams<{ id: string }>();
   const devices = useDevices();
-  // One query; it asks again every few seconds only while the send is moving.
+  // The counters, asked again every few seconds only while the send is
+  // moving; the recipients come a page at a time and refresh more slowly,
+  // so a send to thousands is not downloaded whole every few seconds.
   const batch = useBatch(id);
+  const live = batchLive(batch.data?.batch.status);
+  const messages = useMessages({ batch_id: id }, 100, live);
 
   if (batch.isPending) return <Skeleton className="mt-12 h-64" />;
   if (batch.isError) {
@@ -27,8 +31,8 @@ export default function SendPage() {
       </div>
     );
   }
-  const { batch: bt, messages } = batch.data;
-  const live = batchLive(bt.status);
+  const bt = batch.data.batch;
+  const rows = messages.data?.pages.flatMap((p) => p.data) ?? [];
   const deviceName = devices.data?.data.find((d) => d.id === bt.device_id)?.name ?? "";
   const inFlight = bt.recipient_count - (bt.sent_count + bt.delivered_count + bt.failed_count + bt.unknown_count);
   const segs: [string, number, string][] = [
@@ -98,34 +102,50 @@ export default function SendPage() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>recipients</CardTitle>
+          {bt.recipient_count > rows.length && !messages.isPending ? <CardDescription>The latest {rows.length} of {bt.recipient_count}.</CardDescription> : null}
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Number</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Detail</TableHead>
-                <TableHead className="text-right">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {messages.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-mono text-xs">{m.recipient}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} />
-                  </TableCell>
-                  <TableCell className="max-w-md text-sm text-muted-foreground">
-                    {m.error_message ?? (m.delivered_at ? `Delivered ${relativeTime(m.delivered_at)}` : m.sent_at ? `Sent ${relativeTime(m.sent_at)}` : "")}
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground" title={absoluteTime(m.updated_at)}>
-                    {relativeTime(m.updated_at)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          {messages.isPending ? (
+            <Skeleton className="h-24" />
+          ) : messages.isError ? (
+            <LoadError error={messages.error} retry={() => messages.refetch()} />
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Detail</TableHead>
+                    <TableHead className="text-right">Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-mono text-xs">{m.recipient}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={m.status} label={messageStatusLabel[m.status] ?? m.status} />
+                      </TableCell>
+                      <TableCell className="max-w-md text-sm text-muted-foreground">
+                        {m.error_message ?? (m.delivered_at ? `Delivered ${relativeTime(m.delivered_at)}` : m.sent_at ? `Sent ${relativeTime(m.sent_at)}` : "")}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground" title={absoluteTime(m.updated_at)}>
+                        {relativeTime(m.updated_at)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {messages.hasNextPage ? (
+                <div className="mt-3 flex justify-center">
+                  <button type="button" className={textLink} onClick={() => messages.fetchNextPage()} disabled={messages.isFetchingNextPage}>
+                    {messages.isFetchingNextPage ? "Loading…" : "Load more"}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
     </>

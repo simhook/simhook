@@ -95,6 +95,9 @@ p { margin: 0 0 16px; max-width: 62ch; }
 p.lead { font-size: 17px; }
 .muted { color: var(--muted); }
 .meta { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+/* A digest has no break opportunity of its own; on a phone it must wrap
+   rather than push the page sideways. */
+.digest { overflow-wrap: anywhere; }
 .cap { font-size: 13.5px; color: var(--muted); margin: 10px 0 0; }
 .num { font-variant-numeric: tabular-nums; }
 

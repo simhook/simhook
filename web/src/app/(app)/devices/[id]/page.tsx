@@ -47,12 +47,35 @@ function uptime(ms?: number) {
   return h >= 48 ? `${Math.floor(h / 24)} days` : `${h} h`;
 }
 
-/** The editable fields, initialized from the server record it is keyed on. */
+function simValue(d: Device) {
+  return d.preferred_sim_subscription_id == null ? "default" : String(d.preferred_sim_subscription_id);
+}
+
+/**
+ * The editable fields. The phone's row moves underneath them all the time
+ * (every check-in and every switch bumps it), so a field the reader has not
+ * touched follows the server, and one being edited keeps what was typed.
+ */
 function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; busy: boolean; onSave: (body: Record<string, unknown>) => void }) {
   const [name, setName] = useState(d.name);
   const [delay, setDelay] = useState(String(d.send_delay_seconds));
   const [interval, setInterval_] = useState(String(d.heartbeat_interval_minutes));
-  const [sim, setSim] = useState(d.preferred_sim_subscription_id == null ? "default" : String(d.preferred_sim_subscription_id));
+  const [sim, setSim] = useState(simValue(d));
+  const [seen, setSeen] = useState(d);
+  const [moved, setMoved] = useState(false);
+  if (seen !== d) {
+    setSeen(d);
+    let conflict = false;
+    if (name === seen.name) setName(d.name);
+    else if (d.name !== seen.name) conflict = true;
+    if (delay === String(seen.send_delay_seconds)) setDelay(String(d.send_delay_seconds));
+    else if (d.send_delay_seconds !== seen.send_delay_seconds) conflict = true;
+    if (interval === String(seen.heartbeat_interval_minutes)) setInterval_(String(d.heartbeat_interval_minutes));
+    else if (d.heartbeat_interval_minutes !== seen.heartbeat_interval_minutes) conflict = true;
+    if (sim === simValue(seen)) setSim(simValue(d));
+    else if (simValue(d) !== simValue(seen)) conflict = true;
+    if (conflict) setMoved(true);
+  }
   // A value set through the API that is not one of ours is still shown.
   const intervals = INTERVALS.includes(d.heartbeat_interval_minutes) ? INTERVALS : [...INTERVALS, d.heartbeat_interval_minutes].sort((a, b) => a - b);
 
@@ -64,6 +87,7 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
 
   return (
     <>
+      {moved && dirty ? <p className="text-sm text-muted-foreground">These settings changed elsewhere while you were editing. Saving replaces them with what is here.</p> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="name">
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={64} />
@@ -108,14 +132,15 @@ function SettingsFields({ d, sims, busy, onSave }: { d: Device; sims: Sim[]; bus
       <div>
         <Button
           disabled={!dirty || busy}
-          onClick={() =>
+          onClick={() => {
+            setMoved(false);
             onSave({
               name: name.trim() || undefined,
               send_delay_seconds: Number(delay),
               heartbeat_interval_minutes: Number(interval),
               ...(sim === "default" ? { clear_preferred_sim: true } : { preferred_sim_subscription_id: Number(sim) }),
-            })
-          }
+            });
+          }}
         >
           Save changes
         </Button>
@@ -227,7 +252,7 @@ export default function DevicePage() {
               </div>
               <Switch checked={d.receive_enabled} disabled={busy} onCheckedChange={(v) => save({ receive_enabled: v })} aria-label="Forward incoming SMS" />
             </div>
-            <SettingsFields key={d.updated_at} d={d} sims={sims} busy={busy} onSave={save} />
+            <SettingsFields key={d.id} d={d} sims={sims} busy={busy} onSave={save} />
           </CardContent>
         </Card>
 
