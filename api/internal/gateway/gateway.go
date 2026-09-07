@@ -28,7 +28,9 @@ import (
 
 // Errors surfaced to the HTTP layer.
 var (
-	ErrInvalidPairingCode = errors.New("the pairing code is wrong or has expired")
+	ErrInvalidPairingCode = errors.New("the pairing code is wrong; check it against the dashboard")
+	ErrPairingCodeExpired = errors.New("the pairing code has expired; make a new one in the dashboard")
+	ErrPairingCodeUsed    = errors.New("the pairing code was already used; make a new one in the dashboard")
 	ErrEmailUnverified    = errors.New("verify your email address before sending")
 	ErrNoDevice           = errors.New("no enabled device to send from; pair a phone or pass device_id")
 	ErrDeviceDisabled     = errors.New("the device is disabled")
@@ -138,12 +140,21 @@ func (s *Service) Pair(ctx context.Context, in PairInput) (store.Device, string,
 	var device store.Device
 	var token string
 	err := s.st.Tx(ctx, func(_ pgx.Tx, st *store.Store) error {
-		pc, err := st.GetLivePairingCode(ctx, hash)
+		// A code that exists but is spent says so: the person typing it is
+		// looking at the dashboard, and "make a new one" is the fix for
+		// both, where "wrong" sends them back to compare characters.
+		pc, err := st.GetPairingCodeByHash(ctx, hash)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				return ErrInvalidPairingCode
 			}
 			return err
+		}
+		if pc.ConsumedAt != nil {
+			return ErrPairingCodeUsed
+		}
+		if !pc.ExpiresAt.After(time.Now()) {
+			return ErrPairingCodeExpired
 		}
 		name := ""
 		if in.Name != nil {

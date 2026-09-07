@@ -138,6 +138,10 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusBadRequest, "turnstile_failed", "The bot check did not pass. Reload the page and try again.")
 	case errors.Is(err, gateway.ErrInvalidPairingCode):
 		return apiErr(http.StatusBadRequest, "invalid_pairing_code", err.Error())
+	case errors.Is(err, gateway.ErrPairingCodeExpired):
+		return apiErr(http.StatusBadRequest, "pairing_code_expired", err.Error())
+	case errors.Is(err, gateway.ErrPairingCodeUsed):
+		return apiErr(http.StatusBadRequest, "pairing_code_used", err.Error())
 	case errors.Is(err, gateway.ErrEmailUnverified):
 		return apiErr(http.StatusForbidden, "email_unverified", err.Error())
 	case errors.Is(err, gateway.ErrNoDevice):

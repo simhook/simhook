@@ -49,6 +49,8 @@ import kotlinx.coroutines.launch
 fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // The eight characters alone; the dash the dashboard shows is drawn by
+    // the field, so it cannot be forgotten or typed twice.
     var code by rememberSaveable { mutableStateOf("") }
     var apiUrl by rememberSaveable { mutableStateOf(AppSettings.DEFAULT_API_URL) }
     var showServer by rememberSaveable { mutableStateOf(false) }
@@ -71,7 +73,7 @@ fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> U
             error = null
             try {
                 val token = Push.token(context)
-                container.pair(withCode.trim(), api, token)
+                container.pair(PairingCode.bare(withCode), api, token)
             } catch (e: ApiException) {
                 error = e.message
             } catch (e: Exception) {
@@ -85,7 +87,7 @@ fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> U
     // A link or scanned code carries everything needed. With the default
     // server it pairs at once; with another server it asks first.
     fun applyLink(parsed: PairLink) {
-        code = parsed.code
+        code = PairingCode.bare(parsed.code)
         error = null
         val api = parsed.api
         if (api != null && api != AppSettings.DEFAULT_API_URL) {
@@ -132,10 +134,15 @@ fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> U
         )
         PlainTextField(
             value = code,
-            onValueChange = { code = it.uppercase().take(9) },
+            onValueChange = { code = PairingCode.bare(it) },
             label = "Pairing code",
             placeholder = "ABCD-EFGH",
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii,
+            ),
+            visualTransformation = PairingCode.visual,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -167,7 +174,7 @@ fun PairScreen(container: AppContainer, link: PairLink?, onLinkConsumed: () -> U
             FilledButton(
                 if (busy) "Pairing…" else "Pair",
                 onClick = ::pair,
-                enabled = code.replace("-", "").length >= 8 && !busy,
+                enabled = PairingCode.isComplete(code) && !busy,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

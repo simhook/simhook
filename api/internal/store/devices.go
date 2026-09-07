@@ -79,11 +79,15 @@ func (s *Store) GetUserPairingCode(ctx context.Context, userID, id uuid.UUID) (P
 		from pairing_codes where id = $1 and user_id = $2`, id, userID))
 }
 
-// GetLivePairingCode looks up an unconsumed, unexpired code.
-func (s *Store) GetLivePairingCode(ctx context.Context, hash []byte) (PairingCode, error) {
+// GetPairingCodeByHash looks up a code in any state, so the caller can say
+// whether it is unknown, used, or expired. A live row wins over a spent one
+// with the same hash, then the newest.
+func (s *Store) GetPairingCodeByHash(ctx context.Context, hash []byte) (PairingCode, error) {
 	return one[PairingCode](s.q.Query(ctx, `
 		select id, user_id, code_hash, expires_at, consumed_at, consumed_by_device_id, created_at
-		from pairing_codes where code_hash = $1 and consumed_at is null and expires_at > now()`, hash))
+		from pairing_codes where code_hash = $1
+		order by (consumed_at is null and expires_at > now()) desc, created_at desc
+		limit 1`, hash))
 }
 
 // ConsumePairingCode burns a live code and returns it. Returns ErrNotFound
