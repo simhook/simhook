@@ -90,7 +90,9 @@ function MessageDetail({ message, deviceName, onClose }: { message: Message | nu
               ) : null}
               <div className="contents">
                 <dt className="text-muted-foreground">Message id</dt>
-                <dd className="font-mono text-xs break-all">{m.id}</dd>
+                <dd className="min-w-0 truncate font-mono text-xs" title={m.id}>
+                  {m.id}
+                </dd>
               </div>
             </dl>
           </>

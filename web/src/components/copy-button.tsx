@@ -35,13 +35,16 @@ export function CopyButton({ value, label = "Copy", className }: { value: string
 }
 
 /**
- * A value in mono with a Copy word after it, shown whole: a value one has
- * to copy is never cut short, it wraps. Secrets select in one click.
+ * A value in mono with a Copy word after it. A value too long for the
+ * line is cut with an ellipsis, never wrapped; Copy and a click (which
+ * selects the whole value) still give all of it.
  */
 export function CopyField({ value, secret = false }: { value: string; secret?: boolean }) {
   return (
     <div className="flex min-w-0 items-baseline gap-4 border-y py-2.5">
-      <code className={cn("min-w-0 flex-1 font-mono text-sm break-all", secret && "select-all")}>{value}</code>
+      <code className={cn("min-w-0 flex-1 truncate font-mono text-sm", secret && "select-all")} title={value}>
+        {value}
+      </code>
       <CopyButton value={value} />
     </div>
   );

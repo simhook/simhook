@@ -88,7 +88,9 @@ export default function SendPage() {
           </CardHeader>
           <CardContent>
             <p className="whitespace-pre-wrap break-words text-sm">{bt.body}</p>
-            <p className="mt-3 font-mono text-xs break-all text-muted-foreground">{bt.id}</p>
+            <p className="mt-3 truncate font-mono text-xs text-muted-foreground" title={bt.id}>
+              {bt.id}
+            </p>
           </CardContent>
         </Card>
       </div>
