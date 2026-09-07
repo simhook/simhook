@@ -6,7 +6,7 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
 
 - A VPS with 2 vCPUs and 4 GB of RAM running Ubuntu 24.04 (a Hetzner CX22 or similar). Open ports 22, 80, and 443.
 - The domain on Cloudflare, with a Cloudflare API token that has `Zone: DNS: Edit` on that zone.
-- A Firebase service account JSON for push. Use a project of its own for production: the app's release build is tied to one project, and a development key must never be able to push to production phones.
+- A Firebase service account JSON for push, if the phones should send at once rather than at their next check-in. Use a project of its own for production: the app's release build is tied to one project, and a development key must never be able to push to production phones. Without one, leave `FCM_CREDENTIALS_FILE` empty in `.env`.
 - SMTP credentials from a transactional email provider (Postmark, Resend, Amazon SES, Mailgun all work).
 
 ## First deploy
@@ -29,7 +29,7 @@ One Linux host runs everything: Postgres, the API, the dashboard, Caddy for TLS 
    ```sh
    cp .env.example .env          # domains, Cloudflare token, database password
    cp api.env.example api.env    # secret key, SMTP
-   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
+   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json   # skip without push
    chown 10001:10001 secrets/fcm.json && chmod 400 secrets/fcm.json   # the API runs as uid 10001
    openssl rand -base64 32       # value for SIMHOOK_SECRET_KEY
    openssl rand -hex 24          # value for POSTGRES_PASSWORD
@@ -80,10 +80,13 @@ A change to `caddy/Caddyfile` alone needs a reload, not a rebuild:
 docker compose -f docker-compose.prod.yaml exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-To use the images CI publishes instead of building on the host, log in to GitHub's registry with a token that has `read:packages`, set `API_IMAGE` (and, on simhook.dev itself, `WEB_IMAGE` and `SITE_IMAGE`) in `.env`, then:
+To use the images CI publishes instead of building on the host, log in to GitHub's registry with a token that has `read:packages` and set `API_IMAGE` in `.env`. CI tags every image with the commit it was built from (`sha-` and the first seven characters) and, once CI has passed on `main`, `latest`; pin to a `sha-` tag so a rollback is one line in `.env`. The `web` and `site` images CI publishes fit simhook.dev alone, because they bake in its addresses, so only simhook.dev sets `WEB_IMAGE` and `SITE_IMAGE`; a self-hosted server keeps building those two. Name the services: a bare `pull` also tries to fetch the images this file builds on the host, fails on the first of them, and never reaches `up`.
 
 ```sh
-docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d
+# simhook.dev
+docker compose -f docker-compose.prod.yaml pull api web site && docker compose -f docker-compose.prod.yaml up -d
+# a self-hosted server
+docker compose -f docker-compose.prod.yaml pull api && docker compose -f docker-compose.prod.yaml up -d --build
 ```
 
 ## Paid plans

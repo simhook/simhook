@@ -2,7 +2,7 @@
 # Caddy for TLS and routing, and a nightly database dump.
 #
 #   cp .env.example .env && cp api.env.example api.env   # then fill both in
-#   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json
+#   mkdir -p secrets && cp /path/to/firebase-service-account.json secrets/fcm.json   # or run without push
 #   docker compose -f docker-compose.prod.yaml up -d --build
 #
 # See README.md in this directory for the full runbook.
@@ -49,10 +49,13 @@ services:
       SIMHOOK_SITE_URL: https://${ROOT_DOMAIN}
       SIMHOOK_COOKIE_DOMAIN: ${ROOT_DOMAIN}
       SIMHOOK_DATABASE_URL: postgres://simhook:${POSTGRES_PASSWORD}@postgres:5432/simhook?sslmode=disable
-      SIMHOOK_FCM_CREDENTIALS_FILE: /secrets/fcm.json
+      # Empty in .env runs without push: phones then send on their check-in
+      # schedule, which decision 018 promises works.
+      SIMHOOK_FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE-/secrets/fcm.json}
       SIMHOOK_TRUST_PROXY: "true"
     volumes:
-      - ./secrets/fcm.json:/secrets/fcm.json:ro
+      # The directory, not the file, so a host without the file still starts.
+      - ./secrets:/secrets:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 15s
@@ -63,8 +66,13 @@ services:
       postgres:
         condition: service_healthy
 
+  # The dashboard and the site bake the API and dashboard addresses into
+  # their builds, so the images CI publishes fit simhook.dev alone. By
+  # default both are built on the host; only simhook.dev sets WEB_IMAGE and
+  # SITE_IMAGE, so a self-hoster's pull can never fetch a dashboard that
+  # talks to somebody else's API.
   web:
-    image: ${WEB_IMAGE:-ghcr.io/simhook/web:latest}
+    image: ${WEB_IMAGE:-simhook/web:local}
     build:
       context: ..
       dockerfile: web/Dockerfile
@@ -84,7 +92,7 @@ services:
 
   # The site on the bare domain: static files served by a small Caddy.
   site:
-    image: ${SITE_IMAGE:-ghcr.io/simhook/site:latest}
+    image: ${SITE_IMAGE:-simhook/site:local}
     build:
       context: ..
       dockerfile: site/Dockerfile
