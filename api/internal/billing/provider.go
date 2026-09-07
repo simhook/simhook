@@ -330,7 +330,8 @@ func (s *Service) subscriptionFromCheckout(ctx context.Context, user store.User,
 // ChangePlan moves a live subscription to another plan or interval. A
 // change that costs more per month is invoiced now and takes effect now;
 // one that costs less takes effect at the next period, with nothing
-// refunded, so a month already paid for is kept.
+// refunded, so a month already paid for is kept. Asking for the plan and
+// interval already held clears a change scheduled for the next period.
 func (s *Service) ChangePlan(ctx context.Context, user store.User, planID, interval string) (*Subscription, error) {
 	live, err := s.managed(ctx, user.ID)
 	if err != nil {
@@ -349,7 +350,17 @@ func (s *Service) ChangePlan(ctx context.Context, user store.User, planID, inter
 		current = *live.BillingInterval
 	}
 	if live.PlanID == planID && current == interval {
-		return s.view(ctx, live)
+		// Choosing the plan already held undoes a change scheduled for the
+		// next period; otherwise there is nothing to do.
+		if live.PendingPlanID == nil {
+			return s.view(ctx, live)
+		}
+		sub, err := s.polar.UpdateSubscription(ctx, *live.ProviderSubscriptionID, map[string]any{"pending_update": nil})
+		if err != nil {
+			s.log.ErrorContext(ctx, "clearing the scheduled change failed", "user", user.ID, "err", err)
+			return nil, providerErr(err)
+		}
+		return s.applyAndView(ctx, user.ID, sub)
 	}
 	from, err := s.st.GetPlan(ctx, live.PlanID)
 	if err != nil {
