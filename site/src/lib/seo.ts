@@ -26,6 +26,8 @@ export const fullTitle = (title: string) => `${title} · ${BRAND}`;
 
 export const appUrl = () => (import.meta.env.PUBLIC_APP_URL as string | undefined) || "https://app.simhook.dev";
 export const apiUrl = () => (import.meta.env.PUBLIC_API_URL as string | undefined) || "https://api.simhook.dev";
+/** Whether paid plans can be bought: set at build time once the provider is live (deploy/README.md, "Paid plans"). */
+export const billingOpen = () => (import.meta.env.PUBLIC_BILLING_OPEN as string | undefined) === "1";
 
 /** "/" -> "home", "/docs/guides/two-way-sms" -> "docs-guides-two-way-sms". Shared with scripts/brand.mjs. */
 export const ogSlug = (path: string) => (path === "/" ? "home" : path.slice(1).replace(/\//g, "-"));

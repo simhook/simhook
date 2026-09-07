@@ -81,7 +81,9 @@ func Reset(t *testing.T) {
 	defer conn.Close(ctx)
 	_, err = conn.Exec(ctx, `
 		truncate users cascade;
-		truncate river_job;`)
+		truncate river_job;
+		truncate billing_events;
+		truncate billing_products;`)
 	if err != nil {
 		t.Fatalf("reset: %v", err)
 	}

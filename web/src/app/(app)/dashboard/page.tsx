@@ -204,7 +204,7 @@ export default function DashboardPage() {
             <UsageLine label="This month" used={usage.sent_this_month} limit={limits.monthly_limit} />
             <p className="text-xs text-muted-foreground">
               Up to {limitLabel(limits.batch_limit)} recipients per send. Received messages are not counted.{" "}
-              <Link href="/settings" className="underline decoration-underline underline-offset-4 hover:decoration-foreground">
+              <Link href="/billing" className="underline decoration-underline underline-offset-4 hover:decoration-foreground">
                 Plans
               </Link>
             </p>

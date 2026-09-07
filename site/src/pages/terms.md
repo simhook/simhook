@@ -3,7 +3,7 @@ layout: ../layouts/Page.astro
 title: Terms
 headTitle: "Terms of service"
 description: "The terms for using simhook.dev. Short, because the important parts are simple."
-updated: 2026-09-05
+updated: 2026-09-07
 ---
 
 These terms cover the hosted service at simhook.dev. The software itself is open source under the AGPL-3.0, and running your own copy is governed by that license, not by this page.
@@ -22,6 +22,10 @@ simhook queues text messages and relays them to and from an Android phone you ow
 ## Plans and limits
 
 The Free plan and any paid plan have the limits shown on the [pricing page](/pricing). We may change plans and prices; paid changes are announced ahead of time and never applied to a period you have already paid for.
+
+## Payments
+
+Paid plans are sold by Polar Software, Inc. ("Polar"), our merchant of record. Polar takes the payment, issues the invoice, and handles tax, and its [terms](https://polar.sh/legal/master-services-terms) govern the purchase itself. Prices are shown before tax; tax is added at checkout where it applies. A plan renews at the end of each period until you cancel it in the dashboard, and a cancelled plan runs to the end of the period already paid for. A charge you did not mean to make is refunded if you write to hello@simhook.dev within 14 days of it.
 
 ## What we promise, and what we do not
 

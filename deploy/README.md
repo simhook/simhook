@@ -86,6 +86,24 @@ To use the images CI publishes instead of building on the host, log in to GitHub
 docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d
 ```
 
+## Paid plans
+
+Plans are sold through Polar, a merchant of record (decision 021): it takes the payment, issues the invoice, and handles tax, and the API learns about subscriptions from its webhooks. Nothing is sold until the API has a Polar access token, synced products, and the webhook secret, and until the site is built with `BILLING_OPEN=1`.
+
+Rehearse on the live deployment first. Polar's sandbox is a separate service with test cards, so production can point at it without money moving:
+
+1. Create an organization access token at sandbox.polar.sh. Put it in `api.env` as `SIMHOOK_POLAR_ACCESS_TOKEN` with `SIMHOOK_POLAR_ENVIRONMENT=sandbox`, and name your own account in `SIMHOOK_BILLING_ALLOWLIST` so nobody else sees a checkout. Restart the API.
+2. `docker compose -f docker-compose.prod.yaml exec api simhook billing sync` creates the products (one per paid plan and interval) and the webhook endpoint at `https://<API_DOMAIN>/v1/billing/webhooks/polar`, and prints the endpoint's secret. Put it in `api.env` as `SIMHOOK_POLAR_WEBHOOK_SECRET` and restart the API. `simhook billing status` shows the result.
+3. Buy a plan from the dashboard's Billing page with the test card 4242 4242 4242 4242, change it, cancel it, open the portal. Polar's dashboard shows the deliveries and lets you resend one.
+
+To go live: create a production organization and token at polar.sh, complete its payout setup, switch `SIMHOOK_POLAR_ENVIRONMENT` to `production` with the new token, run `billing sync` again (it prints a new secret), clear the allowlist, set `BILLING_OPEN=1` in `.env`, rebuild the site (`build --no-cache site`, then `up -d site`), and restart the API. Sandbox subscriptions stay in the database as rows of the sandbox environment and grant nothing once the environment changes.
+
+Notes:
+
+- `SIMHOOK_BILLING_BLOCKED_COUNTRIES` (ISO codes, comma-separated) withholds paid plans from visitors of those countries, read from Cloudflare's country header. It is a policy switch, not a security boundary.
+- Polar delivers from a fixed set of addresses and retries for a day; a delivery that does not verify is refused with 403 and shows as failed in Polar's dashboard. If every delivery fails with 403, check whether Cloudflare's Bot Fight Mode is on: it blocks them, and only turning it off helps.
+- A subscription is applied at most once per delivery, and an older delivery arriving after a newer one is ignored, so redelivering is always safe.
+
 ## Backups
 
 The `backup` service writes a dump into `./backups` at 03:00 UTC every day and keeps `BACKUP_KEEP_DAYS` of them. A dump is complete once it has its final name; a `.tmp` file is one being written. Copy that directory somewhere else on a schedule, for example with `rclone` to object storage. Restore with:

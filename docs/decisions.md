@@ -221,3 +221,13 @@ The bot check is Cloudflare Turnstile on sign-in, sign-up, and password reset: t
 **Why:** Search engines and AI answer engines reward the same things: pages they can crawl, understand, and quote, with a stable identity behind them. None of them needs special files, but agents that read documentation do, and the Markdown twins cost nothing because the pages are Markdown already. The edge's managed robots.txt said nothing; an origin file says exactly what was decided. The training signal is a single value to flip if the decision changes.
 
 **Rules out:** Titles or descriptions typed into a page by hand; markup for ratings, offers, or dates that do not exist; a second host in search results; a sitemap date that is not a real change.
+
+## 021. Paid plans through a merchant of record
+
+**Date:** 2026-09-07
+**Decision:** Paid plans are sold by Polar as merchant of record. Polar runs the checkout, takes the card, issues the invoice, collects and files tax, and pays out; simhook keeps its own plans table and learns about subscriptions from Polar's webhooks. The API owns everything a customer touches: it opens checkouts bound to the account id, changes and cancels subscriptions through Polar's API, opens the customer portal, and turns every subscription delivery into one row of the subscriptions table (by provider id, applied at most once per delivery, and never rolled back by an older delivery). `simhook billing sync` makes Polar match the plans table, so the sandbox and production environments are set up by the same command, and the API knows which products belong to which environment. Selling is off until the token, the products, and the webhook secret exist, and an allowlist lets the whole flow run on the live deployment against Polar's sandbox before anyone else sees a checkout. A list of blocked countries withholds paid plans from visitors there. Changes up are charged and applied at once, changes down apply at the next period.
+
+**Why:** A merchant of record takes on VAT and sales-tax registration everywhere, which a one-person company cannot do, and works without a payment processor's presence in the founder's country. Polar sells only software, lists the founder's country for payouts, and has a free year for startups. Keeping the plans table and limit checks ours means the provider can be swapped by rewriting one package. The rehearsal path exists because a checkout is the one flow that cannot be tested with a fake.
+
+**Rules out:** A processor that needs a company where there is none; storing card data; per-message billing; trusting a checkout's return page (the webhook and a fetch of the subscription are what change a plan); a second live subscription per account.
+

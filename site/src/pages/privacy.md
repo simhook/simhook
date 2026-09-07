@@ -3,7 +3,7 @@ layout: ../layouts/Page.astro
 title: Privacy
 headTitle: "Privacy policy"
 description: "What simhook stores, why, for how long, and who else sees it."
-updated: 2026-09-05
+updated: 2026-09-07
 ---
 
 simhook relays text messages through your own phone. To do that it has to hold some of your data. This page says what, in plain words.
@@ -13,6 +13,7 @@ simhook relays text messages through your own phone. To do that it has to hold s
 - **Your account.** The email address you sign up with and a hash of your password. Never the password itself.
 - **Your messages.** The text, the numbers involved, the timestamps, and the delivery states of every message sent or received through simhook, so you can see them in the dashboard and read them through the API. This includes the content of texts the phone receives while forwarding is on.
 - **Your phones.** The model, Android version, app version, SIM details (carrier, country, subscription id, never the phone number of the SIM unless the phone reports one), and at each check-in the battery level, network type, and a few similar figures. They are shown in the dashboard and used to decide whether a phone is online.
+- **Your plan.** Which plan you are on, its dates, and the identifiers Polar gives the subscription and the customer. Never card details: they go to Polar and stay there.
 - **Your integrations.** Webhook URLs and their signing secrets (stored encrypted), API keys (stored hashed), and the log of every webhook delivery, including what your server answered.
 - **Server logs.** Request logs with IP addresses, kept for a short time for debugging and abuse prevention.
 
@@ -26,6 +27,7 @@ simhook relays text messages through your own phone. To do that it has to hold s
 
 - **Hetzner** hosts the servers.
 - **Resend** sends the emails the service needs: verification, password reset, and notices about your account.
+- **Polar** (Polar Software, Inc.) sells the paid plans as merchant of record. When you buy one it sees your email address, name, billing address, and payment details, and keeps them under its own [privacy policy](https://polar.sh/legal/privacy-policy).
 - **Google Firebase Cloud Messaging** delivers pushes to your phone. A push carries only a nudge to check in, never message content.
 - **Google** is involved if you sign in with Google: it tells us your Google account id, email address, name, and picture, and we keep the id to recognise you next time. It learns that you signed in to simhook and nothing else.
 - **Cloudflare** sits in front of the site and the API and sees the traffic in transit, and runs the bot check on the sign-in forms.

@@ -1,14 +1,18 @@
 // Package billing answers "may this account do that" using plan limits and
-// usage counters. Payment provider integration lives here too, later.
+// usage counters, and runs the paid plans through the payment provider:
+// checkouts, plan changes, the customer portal, and the webhooks that keep
+// the subscriptions table true (decision 021).
 package billing
 
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/store"
 )
 
@@ -30,13 +34,30 @@ func (e *LimitError) Error() string {
 	}
 }
 
-// Service checks limits.
+// Service checks limits and talks to the provider.
 type Service struct {
-	st *store.Store
+	st  *store.Store
+	cfg *config.Config
+	log *slog.Logger
+	// polar is nil while no access token is configured; every provider
+	// operation then answers that paid plans are closed.
+	polar *Polar
 }
 
-// New builds the service.
-func New(st *store.Store) *Service { return &Service{st: st} }
+// New builds the service. The provider is on when the configuration names
+// an access token; the rest of the setup (synced products, the webhook
+// secret) is checked per call, so an incomplete setup reads as closed
+// rather than broken.
+func New(st *store.Store, cfg *config.Config, log *slog.Logger) *Service {
+	if log == nil {
+		log = slog.Default()
+	}
+	s := &Service{st: st, cfg: cfg, log: log}
+	if cfg != nil && cfg.PolarAccessToken != "" {
+		s.polar = NewPolar(cfg.PolarEnvironment, cfg.PolarAccessToken)
+	}
+	return s
+}
 
 // Plans returns the public plan catalogue.
 func (s *Service) Plans(ctx context.Context) ([]store.Plan, error) {

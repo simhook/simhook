@@ -1,7 +1,7 @@
 "use client";
 
 import { queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { MeOutputBody, paths } from "@simhook/contracts";
+import type { BillingStatus, MeOutputBody, paths } from "@simhook/contracts";
 import { api, isApiError, unwrap } from "./api";
 
 type Body<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
@@ -26,6 +26,8 @@ export const keys = {
   deliveries: (filter: DeliveryFilter) => ["deliveries", filter] as const,
   apiKeys: ["api-keys"] as const,
   plans: ["plans"] as const,
+  billing: ["billing"] as const,
+  checkout: (id: string) => ["billing", "checkout", id] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -126,6 +128,59 @@ export function useStats() {
 
 export function usePlans() {
   return useQuery({ queryKey: keys.plans, queryFn: () => unwrap(api.GET("/v1/plans")), staleTime: 300_000 });
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+export type { BillingStatus };
+
+export function useBilling() {
+  return useQuery({ queryKey: keys.billing, queryFn: () => unwrap(api.GET("/v1/billing")), staleTime: 15_000 });
+}
+
+/** Watches a checkout the browser came back from until its subscription is on the account, or it failed. */
+export function useCheckoutState(id: string | null) {
+  return useQuery({
+    queryKey: keys.checkout(id ?? ""),
+    queryFn: () => unwrap(api.GET("/v1/billing/checkouts/{id}", { params: { path: { id: id ?? "" } } })),
+    enabled: !!id,
+    retry: false,
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return 2_000;
+      return d.applied || d.status === "expired" || d.status === "failed" ? false : 2_000;
+    },
+  });
+}
+
+export function useBillingMutations() {
+  const qc = useQueryClient();
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: keys.billing });
+    qc.invalidateQueries({ queryKey: keys.me });
+  };
+  return {
+    checkout: useMutation({
+      mutationFn: (body: Body<"/v1/billing/checkout", "post">) => unwrap(api.POST("/v1/billing/checkout", { body })),
+    }),
+    portal: useMutation({
+      mutationFn: () => unwrap(api.POST("/v1/billing/portal")),
+    }),
+    change: useMutation({
+      mutationFn: (body: Body<"/v1/billing/change", "post">) => unwrap(api.POST("/v1/billing/change", { body })),
+      onSuccess: refresh,
+    }),
+    cancel: useMutation({
+      mutationFn: () => unwrap(api.POST("/v1/billing/cancel")),
+      onSuccess: refresh,
+    }),
+    resume: useMutation({
+      mutationFn: () => unwrap(api.POST("/v1/billing/resume")),
+      onSuccess: refresh,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------

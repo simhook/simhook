@@ -6,18 +6,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/simhook/simhook/internal/app"
+	"github.com/simhook/simhook/internal/billing"
 	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/db"
 	"github.com/simhook/simhook/internal/httpapi"
+	"github.com/simhook/simhook/internal/store"
 )
 
 func main() {
@@ -33,6 +37,8 @@ func main() {
 		err = migrate(os.Args[2:])
 	case "openapi":
 		err = openapi()
+	case "billing":
+		err = billingCmd(os.Args[2:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -50,7 +56,10 @@ func usage() {
 
   serve                   run the API server and job workers
   migrate up|down|status  manage the database schema
-  openapi                 print the OpenAPI document as JSON`)
+  openapi                 print the OpenAPI document as JSON
+  billing sync            create or update the paid plans and the webhook endpoint at Polar
+                          (--webhook-url overrides <SIMHOOK_PUBLIC_URL>/v1/billing/webhooks/polar)
+  billing status          show the billing setup for this environment`)
 }
 
 func newLogger(level string) *slog.Logger {
@@ -92,6 +101,69 @@ func migrate(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown migrate action %q", args[0])
+}
+
+// billingCmd runs the provider setup: `sync` makes Polar match the plans
+// table and registers the webhook endpoint, `status` shows the result.
+func billingCmd(args []string) error {
+	if len(args) == 0 {
+		return errors.New("billing needs sync or status")
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	log := newLogger(cfg.LogLevel)
+	ctx := context.Background()
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	svc := billing.New(store.New(pool), cfg, log)
+	switch args[0] {
+	case "sync":
+		fs := flag.NewFlagSet("billing sync", flag.ContinueOnError)
+		address := fs.String("webhook-url", strings.TrimRight(cfg.PublicURL, "/")+"/v1/billing/webhooks/polar", "where Polar delivers events")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		rep, err := svc.Sync(ctx, *address)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("environment: %s\n", rep.Environment)
+		for _, p := range rep.Products {
+			fmt.Printf("product %-9s %-6s %s  $%d.%02d  %s\n", p.PlanID, p.Interval, p.ProductID, p.PriceCents/100, p.PriceCents%100, p.Action)
+		}
+		fmt.Printf("webhook  %s  %s (%s)\n", rep.Endpoint.URL, rep.Endpoint.ID, rep.EndpointAction)
+		fmt.Printf("\nSet SIMHOOK_POLAR_WEBHOOK_SECRET=%s in the API's environment and restart it.\n", rep.Endpoint.Secret)
+		return nil
+	case "status":
+		rep, err := svc.Report(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("environment: %s\naccess token: %v\nwebhook secret: %v\n", rep.Environment, rep.TokenSet, rep.SecretSet)
+		if len(rep.Allowlist) > 0 {
+			fmt.Printf("allowlist: %s\n", strings.Join(rep.Allowlist, ", "))
+		}
+		if len(rep.BlockedCodes) > 0 {
+			fmt.Printf("blocked countries: %s\n", strings.Join(rep.BlockedCodes, ", "))
+		}
+		if len(rep.Products) == 0 {
+			fmt.Println("products: none synced (run `simhook billing sync`)")
+		}
+		for _, p := range rep.Products {
+			fmt.Printf("product %-9s %-6s %s  $%d.%02d  synced %s\n", p.PlanID, p.Interval, p.ProductID, p.PriceCents/100, p.PriceCents%100, p.SyncedAt.Format(time.RFC3339))
+		}
+		for _, ep := range rep.Endpoints {
+			fmt.Printf("webhook  %s  enabled=%v  events=%d\n", ep.URL, ep.Enabled, len(ep.Events))
+		}
+		fmt.Printf("paid plans open: %v\n", svc.Enabled(ctx))
+		return nil
+	}
+	return fmt.Errorf("unknown billing action %q", args[0])
 }
 
 func openapi() error {

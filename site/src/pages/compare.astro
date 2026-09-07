@@ -1,6 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
-import { appUrl, breadcrumbs, webPage } from "../lib/seo";
+import { appUrl, billingOpen, breadcrumbs, webPage } from "../lib/seo";
 
 const app = appUrl();
 const schema = [webPage({ url: "/compare", title: "Own-SIM SMS gateway vs hosted SMS APIs" }), breadcrumbs([["Compare", "/compare"]])];
@@ -30,7 +30,7 @@ const schema = [webPage({ url: "/compare", title: "Own-SIM SMS gateway vs hosted
     <h2>a month of texts, costed</h2>
     <p>Say a small business sends 3,000 texts a month: appointment reminders, order updates, replies to questions. Assume one phone, a consumer plan with unlimited texting that the business already pays for, so an extra text costs it nothing, and recipients who asked for the texts.</p>
     <ul class="plain">
-      <li><b>simhook, hosted</b><span>$12 a month on Pro, or $120 a year, since Free stops at 30 texts a day and 500 a month. Paid plans open soon; every account is on Free until then.</span></li>
+      <li><b>simhook, hosted</b><span>$12 a month on Pro, or $120 a year, since Free stops at 30 texts a day and 500 a month.{billingOpen() ? "" : " Paid plans open soon; every account is on Free until then."}</span></li>
       <li><b>simhook, self-hosted</b><span>$0 to simhook. A small server to run it on, and your time.</span></li>
       <li><b>Time on the phone</b><span>100 texts a day at the default five-second pace take about eight minutes. The phone is free the rest of the day.</span></li>
       <li><b>A hosted API</b><span>3,000 times its per-message price, plus the monthly rental of a number and, in some countries, sender registration. The figures differ by provider and country, so put yours next to these.</span></li>

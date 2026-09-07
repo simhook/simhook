@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // Plan is a tier with its limits. -1 means unlimited.
@@ -43,11 +44,16 @@ type Subscription struct {
 	LimitOverrides         json.RawMessage `db:"limit_overrides" json:"-"`
 	CreatedAt              time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt              time.Time       `db:"updated_at" json:"updated_at"`
+	// What the provider last said, and a change it will apply next period.
+	ProviderUpdatedAt *time.Time `db:"provider_updated_at" json:"-"`
+	PendingPlanID     *string    `db:"pending_plan_id" json:"-"`
+	PendingInterval   *string    `db:"pending_interval" json:"-"`
+	PendingAt         *time.Time `db:"pending_at" json:"-"`
 }
 
 const subscriptionCols = `id, user_id, plan_id, status, provider, provider_subscription_id, provider_customer_id,
 	billing_interval, current_period_start, current_period_end, cancel_at_period_end, ended_at, limit_overrides,
-	created_at, updated_at`
+	created_at, updated_at, provider_updated_at, pending_plan_id, pending_interval, pending_at`
 
 // ListPlans returns the active plans in display order.
 func (s *Store) ListPlans(ctx context.Context) ([]Plan, error) {
@@ -64,6 +70,12 @@ func (s *Store) GetPlan(ctx context.Context, id string) (Plan, error) {
 func (s *Store) GetLiveSubscription(ctx context.Context, userID uuid.UUID) (Subscription, error) {
 	return one[Subscription](s.q.Query(ctx, `
 		select `+subscriptionCols+` from subscriptions where user_id = $1 and ended_at is null`, userID))
+}
+
+// SubscriptionLive reports whether a status grants the plan. past_due is
+// the provider retrying a payment; the plan stays until it gives up.
+func SubscriptionLive(status string) bool {
+	return status == "active" || status == "trialing" || status == "past_due"
 }
 
 // Limits are the effective limits for a user after overrides.
@@ -83,7 +95,7 @@ func (s *Store) EffectiveLimits(ctx context.Context, userID uuid.UUID) (Limits, 
 	sub, err := s.GetLiveSubscription(ctx, userID)
 	switch {
 	case err == nil:
-		if sub.Status == "active" || sub.Status == "trialing" || sub.Status == "past_due" {
+		if SubscriptionLive(sub.Status) {
 			planID = sub.PlanID
 			overrides = sub.LimitOverrides
 		}
@@ -195,4 +207,124 @@ func (s *Store) GetUsage(ctx context.Context, userID uuid.UUID, now time.Time) (
 		}
 	}
 	return u, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// The payment provider's side: its products, its deliveries, its view of a
+// subscription (decision 021)
+// ---------------------------------------------------------------------------
+
+// BillingProduct is a paid plan and interval as the provider sells it.
+type BillingProduct struct {
+	Provider    string    `db:"provider" json:"-"`
+	Environment string    `db:"environment" json:"-"`
+	PlanID      string    `db:"plan_id" json:"plan_id"`
+	Interval    string    `db:"interval" json:"interval"`
+	ProductID   string    `db:"product_id" json:"product_id"`
+	PriceID     string    `db:"price_id" json:"-"`
+	PriceCents  int32     `db:"price_cents" json:"price_cents"`
+	SyncedAt    time.Time `db:"synced_at" json:"-"`
+}
+
+const billingProductCols = `provider, environment, plan_id, interval, product_id, price_id, price_cents, synced_at`
+
+// UpsertBillingProduct records the provider's product for a plan and interval.
+func (s *Store) UpsertBillingProduct(ctx context.Context, p BillingProduct) error {
+	_, err := s.q.Exec(ctx, `
+		insert into billing_products (provider, environment, plan_id, interval, product_id, price_id, price_cents, synced_at)
+		values ($1, $2, $3, $4, $5, $6, $7, now())
+		on conflict (provider, environment, plan_id, interval) do update
+			set product_id = excluded.product_id, price_id = excluded.price_id, price_cents = excluded.price_cents, synced_at = now()`,
+		p.Provider, p.Environment, p.PlanID, p.Interval, p.ProductID, p.PriceID, p.PriceCents)
+	return err
+}
+
+// ListBillingProducts returns the products synced for one environment.
+func (s *Store) ListBillingProducts(ctx context.Context, provider, environment string) ([]BillingProduct, error) {
+	return many[BillingProduct](s.q.Query(ctx, `
+		select `+billingProductCols+` from billing_products
+		where provider = $1 and environment = $2 order by plan_id, interval`, provider, environment))
+}
+
+// RecordBillingEvent notes a provider delivery by its id and reports
+// whether it is new. A redelivery is not.
+func (s *Store) RecordBillingEvent(ctx context.Context, provider, id, kind string) (bool, error) {
+	tag, err := s.q.Exec(ctx, `insert into billing_events (id, provider, type) values ($1, $2, $3) on conflict (id) do nothing`,
+		id, provider, kind)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// HasProviderCustomer reports whether the user ever had a subscription
+// with the provider, which is when the provider knows them as a customer.
+func (s *Store) HasProviderCustomer(ctx context.Context, userID uuid.UUID, provider string) (bool, error) {
+	var has bool
+	err := s.q.QueryRow(ctx, `select exists (select 1 from subscriptions where user_id = $1 and provider = $2)`, userID, provider).Scan(&has)
+	return has, err
+}
+
+// ProviderSubscription is the provider's view of one subscription.
+type ProviderSubscription struct {
+	Provider           string
+	SubscriptionID     string
+	CustomerID         string
+	UserID             uuid.UUID
+	PlanID             string
+	Interval           string
+	Status             string
+	CurrentPeriodStart *time.Time
+	CurrentPeriodEnd   *time.Time
+	CancelAtPeriodEnd  bool
+	EndedAt            *time.Time
+	// UpdatedAt is when the provider last changed it; an older view than
+	// the one stored is not applied.
+	UpdatedAt       time.Time
+	PendingPlanID   *string
+	PendingInterval *string
+	PendingAt       *time.Time
+}
+
+// ApplyProviderSubscription writes the provider's view: the row with that
+// provider id is updated, or created. A row that is not ended is the one
+// live row the user may have, so any other live row ends first. It
+// reports whether anything was written; a view older than the stored one
+// is skipped. Call it inside a transaction.
+func (s *Store) ApplyProviderSubscription(ctx context.Context, ps ProviderSubscription) (bool, error) {
+	var stored *time.Time
+	err := s.q.QueryRow(ctx, `
+		select provider_updated_at from subscriptions where provider = $1 and provider_subscription_id = $2`,
+		ps.Provider, ps.SubscriptionID).Scan(&stored)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return false, err
+	}
+	if stored != nil && stored.After(ps.UpdatedAt) {
+		return false, nil
+	}
+	if ps.EndedAt == nil {
+		if _, err := s.q.Exec(ctx, `
+			update subscriptions set ended_at = now(), updated_at = now()
+			where user_id = $1 and ended_at is null
+			  and (provider is distinct from $2 or provider_subscription_id is distinct from $3)`,
+			ps.UserID, ps.Provider, ps.SubscriptionID); err != nil {
+			return false, err
+		}
+	}
+	_, err = s.q.Exec(ctx, `
+		insert into subscriptions (user_id, plan_id, status, provider, provider_subscription_id, provider_customer_id,
+			billing_interval, current_period_start, current_period_end, cancel_at_period_end, ended_at,
+			provider_updated_at, pending_plan_id, pending_interval, pending_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		on conflict (provider, provider_subscription_id) where provider_subscription_id is not null do update set
+			plan_id = excluded.plan_id, status = excluded.status, provider_customer_id = excluded.provider_customer_id,
+			billing_interval = excluded.billing_interval, current_period_start = excluded.current_period_start,
+			current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
+			ended_at = excluded.ended_at, provider_updated_at = excluded.provider_updated_at,
+			pending_plan_id = excluded.pending_plan_id, pending_interval = excluded.pending_interval,
+			pending_at = excluded.pending_at, updated_at = now()`,
+		ps.UserID, ps.PlanID, ps.Status, ps.Provider, ps.SubscriptionID, ps.CustomerID,
+		ps.Interval, ps.CurrentPeriodStart, ps.CurrentPeriodEnd, ps.CancelAtPeriodEnd, ps.EndedAt,
+		ps.UpdatedAt, ps.PendingPlanID, ps.PendingInterval, ps.PendingAt)
+	return true, wrapWrite(err)
 }

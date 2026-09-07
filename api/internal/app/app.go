@@ -100,7 +100,7 @@ func Build(ctx context.Context, cfg *config.Config, log *slog.Logger, opts Optio
 	}
 
 	authSvc := auth.New(st, cfg, mailer, log)
-	billingSvc := billing.New(st)
+	billingSvc := billing.New(st, cfg, log)
 	hooksSvc := webhooks.New(st, cfg, box, mailer, log)
 	gwSvc := gateway.New(st, cfg, sender, hooksSvc, billingSvc, log)
 

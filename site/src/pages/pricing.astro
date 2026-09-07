@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
-import { breadcrumbs } from "../lib/seo";
+import { appUrl, billingOpen, breadcrumbs } from "../lib/seo";
+const open = billingOpen();
 ---
 
 <Base schema={[breadcrumbs([["Pricing", "/pricing"]])]}>
@@ -16,7 +17,11 @@ import { breadcrumbs } from "../lib/seo";
         <tr><td>Scale</td><td>50,000 a month</td><td>10</td><td>2,500 recipients</td><td class="nowrap">$39 / month, or $390 / year</td></tr>
       </tbody>
     </table>
-    <p class="cap">Paid plans open soon. Every account is on Free until then, and nothing you build changes when you upgrade.</p>
+    {open ? (
+      <p class="cap">Upgrade under <a href={`${appUrl()}/billing`}>Billing</a> in the dashboard. Nothing you build changes when you upgrade.</p>
+    ) : (
+      <p class="cap">Paid plans open soon. Every account is on Free until then, and nothing you build changes when you upgrade.</p>
+    )}
   </section>
 
   <section>
@@ -34,6 +39,19 @@ import { breadcrumbs } from "../lib/seo";
     <h2>every plan has</h2>
     <p>The full API, signed webhooks with retries, delivery receipts, dual-SIM support, scheduling, the dashboard, the TypeScript SDK, the MCP server, and the app with its updates. Limits are the only difference.</p>
   </section>
+
+  {open ? (
+    <section>
+      <h2>billing</h2>
+      <ul class="plain">
+        <li><b>Who charges you</b><span>Polar Software, Inc., our merchant of record, sells the plans, issues the invoice, and handles tax. Its name is on the card statement. simhook never sees your card.</span></li>
+        <li><b>Tax</b><span>Prices are in US dollars before tax. VAT or sales tax is added at checkout where it applies, from your billing address.</span></li>
+        <li><b>Renewal</b><span>A plan renews monthly or yearly until you cancel it in the dashboard. A cancelled plan runs to the end of the paid period, then the account is on Free.</span></li>
+        <li><b>Changing plans</b><span>Moving up is charged and applied right away, less what the period already paid for. Moving down applies at the next renewal.</span></li>
+        <li><b>Refunds</b><span>A charge you did not mean to make is refunded if you write to <a href="mailto:hello@simhook.dev">hello@simhook.dev</a> within 14 days of it.</span></li>
+      </ul>
+    </section>
+  ) : null}
 
   <section>
     <h2>self-hosting</h2>

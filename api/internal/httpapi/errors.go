@@ -148,6 +148,25 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusUnprocessableEntity, "validation_failed", err.Error())
 	case errors.Is(err, webhooks.ErrTooMany):
 		return apiErr(http.StatusTooManyRequests, "plan_limit_webhooks", err.Error())
+	case errors.Is(err, billing.ErrClosed):
+		return apiErr(http.StatusForbidden, "billing_closed", "Paid plans are not open yet.")
+	case errors.Is(err, billing.ErrRegion):
+		return apiErr(http.StatusForbidden, "billing_region", "Paid plans are not offered in your country.")
+	case errors.Is(err, billing.ErrUnverified):
+		return apiErr(http.StatusForbidden, "email_unverified", err.Error())
+	case errors.Is(err, billing.ErrSubscribed):
+		return apiErr(http.StatusConflict, "already_subscribed", err.Error())
+	case errors.Is(err, billing.ErrNotSubscribed):
+		return apiErr(http.StatusConflict, "not_subscribed", err.Error())
+	case errors.Is(err, billing.ErrNoPlan):
+		return apiErr(http.StatusUnprocessableEntity, "validation_failed", err.Error())
+	case errors.Is(err, billing.ErrNoCustomer):
+		return apiErr(http.StatusNotFound, "no_billing_account", err.Error())
+	case errors.Is(err, billing.ErrWebhookSignature):
+		return apiErr(http.StatusForbidden, "invalid_signature", "The delivery does not verify against the endpoint secret.")
+	case errors.Is(err, billing.ErrProvider):
+		log.ErrorContext(ctx, "payment provider error", "err", err)
+		return apiErr(http.StatusBadGateway, "provider_unavailable", "The payment provider could not be reached. Try again in a moment.")
 	case errors.Is(err, gateway.ErrQueueNotReady), errors.Is(err, webhooks.ErrQueueNotReady):
 		return apiErr(http.StatusServiceUnavailable, "unavailable", "The service is starting up. Try again in a moment.")
 	case errors.Is(err, context.Canceled):

@@ -23,7 +23,8 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 FROM deps AS build
 ARG PUBLIC_API_URL
 ARG PUBLIC_APP_URL
-ENV PUBLIC_API_URL=$PUBLIC_API_URL PUBLIC_APP_URL=$PUBLIC_APP_URL
+ARG PUBLIC_BILLING_OPEN
+ENV PUBLIC_API_URL=$PUBLIC_API_URL PUBLIC_APP_URL=$PUBLIC_APP_URL PUBLIC_BILLING_OPEN=$PUBLIC_BILLING_OPEN
 COPY packages/contracts packages/contracts
 COPY site site
 # The build fetches the two typefaces from fontsource once; the cache keeps

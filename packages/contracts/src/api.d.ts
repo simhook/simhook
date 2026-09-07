@@ -374,6 +374,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Billing status
+         * @description The account's subscription, whether a paid plan can be bought right now, and whether the provider's portal is available.
+         */
+        get: operations["billing-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel at period end
+         * @description The subscription runs to the end of the paid period, then the account is on Free.
+         */
+        post: operations["cancel-subscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the plan
+         * @description Moves the live subscription to another plan or interval. A change that costs more per month is charged and applied now; one that costs less applies at the next period.
+         */
+        post: operations["change-plan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a checkout
+         * @description Opens a hosted checkout for a paid plan and returns its address. The provider sends the browser back to the dashboard with the checkout id when it is paid.
+         */
+        post: operations["create-checkout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/checkouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a checkout
+         * @description The state of a checkout the browser came back from. A paid one puts its subscription on the account at once, without waiting for the provider's webhook.
+         */
+        get: operations["checkout-state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the billing portal
+         * @description A short-lived address for the provider's portal: invoices, the payment method, and the subscription.
+         */
+        post: operations["billing-portal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a cancellation
+         * @description Keeps a subscription that was set to end at the period end.
+         */
+        post: operations["resume-subscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device": {
         parameters: {
             query?: never;
@@ -907,9 +1047,44 @@ export interface components {
             batch: components["schemas"]["Batch"];
             messages: components["schemas"]["Message"][];
         };
+        BillingStatus: {
+            checkout: components["schemas"]["CheckoutState"];
+            /** @description Whether the provider's portal (invoices, payment method) can be opened for this account. */
+            portal_available: boolean;
+            /** @description Payment provider, or empty while paid plans are closed for this account. */
+            provider: string;
+            /** @description The live subscription, or null on Free. */
+            subscription: components["schemas"]["Subscription"];
+        };
         ChangePasswordInputBody: {
             current_password: string;
             new_password: string;
+        };
+        CheckoutInputBody: {
+            /**
+             * @description Billing interval.
+             * @enum {string}
+             */
+            interval: "month" | "year";
+            /** @description A paid plan from GET /v1/plans. */
+            plan_id: string;
+        };
+        CheckoutResult: {
+            /** @description True once the subscription it produced is on the account. */
+            applied: boolean;
+            /**
+             * @description The checkout's state at the provider.
+             * @enum {string}
+             */
+            status: "open" | "expired" | "confirmed" | "succeeded" | "failed";
+        };
+        CheckoutState: {
+            available: boolean;
+            /**
+             * @description Why not, when it cannot: paid plans are closed, not offered in the visitor's country, the email is unverified, or the account already has a subscription to change instead.
+             * @enum {string}
+             */
+            reason?: "closed" | "region" | "verify_email" | "subscribed";
         };
         CreateKeyInputBody: {
             /**
@@ -1207,6 +1382,14 @@ export interface components {
             /** @description Bearer token for /v1/device endpoints. Shown once. */
             device_token: string;
         };
+        PendingChange: {
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            interval: "month" | "year";
+            plan_id: string;
+            plan_name: string;
+        };
         Plan: {
             active: boolean;
             /** Format: int32 */
@@ -1223,6 +1406,15 @@ export interface components {
             name: string;
             /** Format: int32 */
             yearly_price_cents: number;
+        };
+        PlanChangeInputBody: {
+            /**
+             * @description Billing interval.
+             * @enum {string}
+             */
+            interval: "month" | "year";
+            /** @description A paid plan from GET /v1/plans. */
+            plan_id: string;
         };
         PlansOutputBody: {
             data: components["schemas"]["Plan"][];
@@ -1330,6 +1522,33 @@ export interface components {
             /** @enum {string} */
             status: "sent" | "delivered" | "failed";
         };
+        Subscription: {
+            /** @description True when the subscription ends at the period end instead of renewing. */
+            cancel_at_period_end: boolean;
+            /**
+             * Format: date-time
+             * @description When the paid period ends; the renewal date unless the subscription is set to cancel.
+             */
+            current_period_end: string | null;
+            /** @enum {string} */
+            interval?: "month" | "year";
+            /** @description True when the provider runs it; false for a plan granted by hand. */
+            managed: boolean;
+            /** @description A plan change the provider applies at the next period, or null. */
+            pending: components["schemas"]["PendingChange"];
+            plan_id: string;
+            plan_name: string;
+            /**
+             * Format: int32
+             * @description What the current period costs, in US cents.
+             */
+            price_cents: number;
+            /** @description active, trialing, past_due, canceled, incomplete, unpaid, or paused, as the provider reports it. */
+            status: string;
+        };
+        SubscriptionOutputBody: {
+            subscription: components["schemas"]["Subscription"];
+        };
         UpdateWebhookInputBody: {
             /** @description Re-enabling clears any automatic pause. */
             enabled?: boolean;
@@ -1337,6 +1556,10 @@ export interface components {
             name?: string;
             /** Format: uri */
             url?: string;
+        };
+        UrlOutputBody: {
+            /** @description Page to send the browser to. */
+            url: string;
         };
         UsageView: {
             /** Format: int32 */
@@ -2052,6 +2275,220 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "billing-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "cancel-subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "change-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanChangeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "create-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "checkout-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The checkout id the provider appended to the return address. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "billing-portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UrlOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    "resume-subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionOutputBody"];
                 };
             };
             /** @description Error */

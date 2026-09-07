@@ -129,6 +129,7 @@ func New(deps Deps) *Server {
 	s.registerDevices()
 	s.registerMessages()
 	s.registerWebhooks()
+	s.registerBilling()
 	s.registerPhone()
 	return s
 }

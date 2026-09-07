@@ -14,8 +14,8 @@ import { LoadError, PageHeader, textLink } from "@/components/page-header";
 import { useAccount } from "@/components/session-provider";
 import { StatusBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/api";
-import { absoluteTime, browserName, formatCount, limitLabel, priceLabel, relativeTime } from "@/lib/format";
-import { useAuthMutations, usePlans, useSessionMutations, useSessions } from "@/lib/queries";
+import { absoluteTime, browserName, relativeTime } from "@/lib/format";
+import { useAuthMutations, useSessionMutations, useSessions } from "@/lib/queries";
 
 function ProfileCard({ user }: { user: User }) {
   const { updateProfile, sendVerification } = useAuthMutations();
@@ -137,15 +137,14 @@ function SessionsSection() {
 }
 
 export default function SettingsPage() {
-  const { user, limits, usage } = useAccount();
-  const plans = usePlans();
+  const { user } = useAccount();
   const { changePassword } = useAuthMutations();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
 
   return (
     <>
-      <PageHeader title="Settings" description="Your account and plan." />
+      <PageHeader title="Settings" description="Your account. The plan is under Billing." />
       <div className="grid gap-6 lg:grid-cols-2">
         <ProfileCard key={user.id} user={user} />
 
@@ -196,50 +195,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
           )}
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Plan</CardTitle>
-            <CardDescription>
-              You are on the {limits.plan_name} plan, {formatCount(usage.sent_this_month)} of {limitLabel(limits.monthly_limit)} messages used this month.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Per day</TableHead>
-                    <TableHead>Per month</TableHead>
-                    <TableHead>Per send</TableHead>
-                    <TableHead>Phones</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(plans.data?.data ?? []).map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">
-                        {p.name}
-                        {p.id === limits.plan_id ? <span className="ml-2 font-mono text-[11px] text-muted-foreground">current</span> : null}
-                      </TableCell>
-                      <TableCell>{limitLabel(p.daily_limit)}</TableCell>
-                      <TableCell>{limitLabel(p.monthly_limit)}</TableCell>
-                      <TableCell>{limitLabel(p.batch_limit)}</TableCell>
-                      <TableCell>{limitLabel(p.device_limit)}</TableCell>
-                      <TableCell className="text-right">
-                        {priceLabel(p.monthly_price_cents)}
-                        {p.monthly_price_cents ? <span className="text-muted-foreground">/mo</span> : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">Upgrades open soon. Until then, limits above apply.</p>
-          </CardContent>
         </Card>
 
         <SessionsSection />

@@ -247,6 +247,33 @@
         ],
         "type": "object"
       },
+      "BillingStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "checkout": {
+            "$ref": "#/components/schemas/CheckoutState"
+          },
+          "portal_available": {
+            "description": "Whether the provider's portal (invoices, payment method) can be opened for this account.",
+            "type": "boolean"
+          },
+          "provider": {
+            "description": "Payment provider, or empty while paid plans are closed for this account.",
+            "type": "string"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/Subscription",
+            "description": "The live subscription, or null on Free."
+          }
+        },
+        "required": [
+          "provider",
+          "subscription",
+          "checkout",
+          "portal_available"
+        ],
+        "type": "object"
+      },
       "ChangePasswordInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -263,6 +290,75 @@
         "required": [
           "current_password",
           "new_password"
+        ],
+        "type": "object"
+      },
+      "CheckoutInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "description": "Billing interval.",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "type": "string"
+          },
+          "plan_id": {
+            "description": "A paid plan from GET /v1/plans.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "interval"
+        ],
+        "type": "object"
+      },
+      "CheckoutResult": {
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "description": "True once the subscription it produced is on the account.",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "The checkout's state at the provider.",
+            "enum": [
+              "open",
+              "expired",
+              "confirmed",
+              "succeeded",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "applied"
+        ],
+        "type": "object"
+      },
+      "CheckoutState": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "Why not, when it cannot: paid plans are closed, not offered in the visitor's country, the email is unverified, or the account already has a subscription to change instead.",
+            "enum": [
+              "closed",
+              "region",
+              "verify_email",
+              "subscribed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "available"
         ],
         "type": "object"
       },
@@ -1252,6 +1348,35 @@
         ],
         "type": "object"
       },
+      "PendingChange": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "interval": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "type": "string"
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "plan_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "interval",
+          "at"
+        ],
+        "type": "object"
+      },
       "Plan": {
         "additionalProperties": false,
         "properties": {
@@ -1299,6 +1424,28 @@
           "monthly_price_cents",
           "yearly_price_cents",
           "active"
+        ],
+        "type": "object"
+      },
+      "PlanChangeInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "interval": {
+            "description": "Billing interval.",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "type": "string"
+          },
+          "plan_id": {
+            "description": "A paid plan from GET /v1/plans.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "interval"
         ],
         "type": "object"
       },
@@ -1618,6 +1765,76 @@
         ],
         "type": "object"
       },
+      "Subscription": {
+        "additionalProperties": false,
+        "properties": {
+          "cancel_at_period_end": {
+            "description": "True when the subscription ends at the period end instead of renewing.",
+            "type": "boolean"
+          },
+          "current_period_end": {
+            "description": "When the paid period ends; the renewal date unless the subscription is set to cancel.",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "type": "string"
+          },
+          "managed": {
+            "description": "True when the provider runs it; false for a plan granted by hand.",
+            "type": "boolean"
+          },
+          "pending": {
+            "$ref": "#/components/schemas/PendingChange",
+            "description": "A plan change the provider applies at the next period, or null."
+          },
+          "plan_id": {
+            "type": "string"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "price_cents": {
+            "description": "What the current period costs, in US cents.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "description": "active, trialing, past_due, canceled, incomplete, unpaid, or paused, as the provider reports it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "status",
+          "price_cents",
+          "current_period_end",
+          "cancel_at_period_end",
+          "managed",
+          "pending"
+        ],
+        "type": "object"
+      },
+      "SubscriptionOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "subscription": {
+            "$ref": "#/components/schemas/Subscription"
+          }
+        },
+        "required": [
+          "subscription"
+        ],
+        "type": "object"
+      },
       "UpdateWebhookInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1641,6 +1858,19 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "UrlOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "description": "Page to send the browser to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
         "type": "object"
       },
       "UsageView": {
@@ -2873,6 +3103,325 @@
           "messages"
         ],
         "x-simhook-scope": "read"
+      }
+    },
+    "/v1/billing": {
+      "get": {
+        "description": "The account's subscription, whether a paid plan can be bought right now, and whether the provider's portal is available.",
+        "operationId": "billing-status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Billing status",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/cancel": {
+      "post": {
+        "description": "The subscription runs to the end of the paid period, then the account is on Free.",
+        "operationId": "cancel-subscription",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Cancel at period end",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/change": {
+      "post": {
+        "description": "Moves the live subscription to another plan or interval. A change that costs more per month is charged and applied now; one that costs less applies at the next period.",
+        "operationId": "change-plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanChangeInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Change the plan",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/checkout": {
+      "post": {
+        "description": "Opens a hosted checkout for a paid plan and returns its address. The provider sends the browser back to the dashboard with the checkout id when it is paid.",
+        "operationId": "create-checkout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start a checkout",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/checkouts/{id}": {
+      "get": {
+        "description": "The state of a checkout the browser came back from. A paid one puts its subscription on the account at once, without waiting for the provider's webhook.",
+        "operationId": "checkout-state",
+        "parameters": [
+          {
+            "description": "The checkout id the provider appended to the return address.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The checkout id the provider appended to the return address.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Read a checkout",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/portal": {
+      "post": {
+        "description": "A short-lived address for the provider's portal: invoices, the payment method, and the subscription.",
+        "operationId": "billing-portal",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Open the billing portal",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
+      }
+    },
+    "/v1/billing/resume": {
+      "post": {
+        "description": "Keeps a subscription that was set to end at the period end.",
+        "operationId": "resume-subscription",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Undo a cancellation",
+        "tags": [
+          "billing"
+        ],
+        "x-simhook-scope": "session"
       }
     },
     "/v1/device": {

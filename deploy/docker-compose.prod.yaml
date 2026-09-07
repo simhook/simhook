@@ -91,6 +91,7 @@ services:
       args:
         PUBLIC_API_URL: https://${API_DOMAIN}
         PUBLIC_APP_URL: https://${APP_DOMAIN}
+        PUBLIC_BILLING_OPEN: ${BILLING_OPEN:-0}
     restart: unless-stopped
     <<: *logging
     healthcheck:

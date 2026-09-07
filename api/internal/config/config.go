@@ -71,6 +71,24 @@ type Config struct {
 	TurnstileSiteKey   string `env:"SIMHOOK_TURNSTILE_SITE_KEY"`
 	TurnstileSecretKey string `env:"SIMHOOK_TURNSTILE_SECRET_KEY"`
 
+	// Paid plans through Polar, the merchant of record (decision 021). The
+	// access token turns the provider on and picks nothing else; the
+	// environment says which Polar it belongs to (the sandbox is a separate
+	// service with test cards); the webhook secret is what `simhook billing
+	// sync` hands back after registering the endpoint. Paid plans stay
+	// closed until all three are set and the products are synced.
+	PolarAccessToken   string `env:"SIMHOOK_POLAR_ACCESS_TOKEN"`
+	PolarWebhookSecret string `env:"SIMHOOK_POLAR_WEBHOOK_SECRET"`
+	PolarEnvironment   string `env:"SIMHOOK_POLAR_ENVIRONMENT" envDefault:"sandbox"`
+	// BillingAllowlist, when set, limits checkout to these account emails:
+	// the way to run the whole flow on the live deployment before opening
+	// it. Accounts with a subscription already keep managing it.
+	BillingAllowlist []string `env:"SIMHOOK_BILLING_ALLOWLIST" envSeparator:","`
+	// BillingBlockedCountries lists ISO 3166-1 alpha-2 codes whose
+	// visitors are not offered paid plans, read from the country header
+	// the edge sets. Empty means everyone.
+	BillingBlockedCountries []string `env:"SIMHOOK_BILLING_BLOCKED_COUNTRIES" envSeparator:","`
+
 	secretKey []byte
 }
 
@@ -109,6 +127,13 @@ func (c *Config) validate() error {
 	if (c.TurnstileSiteKey == "") != (c.TurnstileSecretKey == "") {
 		return fmt.Errorf("config: SIMHOOK_TURNSTILE_SITE_KEY and SIMHOOK_TURNSTILE_SECRET_KEY go together")
 	}
+	switch c.PolarEnvironment {
+	case "sandbox", "production":
+	default:
+		return fmt.Errorf("config: SIMHOOK_POLAR_ENVIRONMENT must be sandbox or production, not %q", c.PolarEnvironment)
+	}
+	c.BillingAllowlist = cleanList(c.BillingAllowlist, strings.ToLower)
+	c.BillingBlockedCountries = cleanList(c.BillingBlockedCountries, strings.ToUpper)
 	c.CookieDomain = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.CookieDomain), "."))
 	if c.CookieDomain != "" {
 		// A flag set on a domain the dashboard is not under would never reach
@@ -124,6 +149,17 @@ func (c *Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// cleanList trims, normalizes, and drops empty entries.
+func cleanList(in []string, norm func(string) string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if v = norm(strings.TrimSpace(v)); v != "" && !slices.Contains(out, v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // UnderDomain reports whether host is domain itself or a name under it.
@@ -167,6 +203,19 @@ func (c *Config) GoogleEnabled() bool { return c.GoogleClientID != "" && c.Googl
 // TurnstileEnabled reports whether the bot check is configured.
 func (c *Config) TurnstileEnabled() bool {
 	return c.TurnstileSiteKey != "" && c.TurnstileSecretKey != ""
+}
+
+// BillingAllowed reports whether an account may buy a plan under the
+// allowlist: everyone when it is empty.
+func (c *Config) BillingAllowed(email string) bool {
+	return len(c.BillingAllowlist) == 0 || slices.Contains(c.BillingAllowlist, strings.ToLower(strings.TrimSpace(email)))
+}
+
+// CountryBlocked reports whether paid plans are withheld from a country
+// code. An unknown or empty code is not blocked.
+func (c *Config) CountryBlocked(code string) bool {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	return code != "" && slices.Contains(c.BillingBlockedCountries, code)
 }
 
 // SecretKey returns the decoded server key.
