@@ -197,25 +197,37 @@ type MessageTransition struct {
 	PrevStatus string `db:"prev_status"`
 }
 
+// ErrorCodeInterrupted is what the phone reports when it handed a message
+// to the radio and never heard back: a failure by its best guess, which a
+// later truthful report is allowed to overturn.
+const ErrorCodeInterrupted = "interrupted"
+
 // TransitionMessage moves one message from any of the allowed statuses to
 // the new one. Returns ErrNotFound when the message is not on the device or
-// is not in an allowed state.
+// is not in an allowed state. A failure the phone labelled interrupted is a
+// guess, so a sent or delivered report still moves the message on from it.
+// The row is locked while its old status is read, so two reports arriving
+// together see each other: the second reads the status the first left, and
+// the batch counters move once per report.
 func (s *Store) TransitionMessage(ctx context.Context, id, deviceID uuid.UUID, from []string, to string, at time.Time, errorCode, errorMessage *string) (MessageTransition, error) {
 	return one[MessageTransition](s.q.Query(ctx, `
 		with prev as (
-			select status as prev_status from messages where id = $1 and device_id = $2
+			select status as prev_status from messages where id = $1 and device_id = $2 for update
 		)
 		update messages m set
 			status = $3::text::message_status,
 			sent_at = case when $3 = 'sent' then $4 else m.sent_at end,
 			delivered_at = case when $3 = 'delivered' then $4 else m.delivered_at end,
 			failed_at = case when $3 = 'failed' then $4 else m.failed_at end,
-			error_code = case when $3 = 'failed' then $5 else m.error_code end,
-			error_message = case when $3 = 'failed' then $6 else m.error_message end
+			error_code = case when $3 = 'failed' then $5 when $3 in ('sent', 'delivered') then null else m.error_code end,
+			error_message = case when $3 = 'failed' then $6 when $3 in ('sent', 'delivered') then null else m.error_message end
 		from prev
-		where m.id = $1 and m.device_id = $2 and m.status::text = any($7::text[])
+		where m.id = $1 and m.device_id = $2 and (
+			m.status::text = any($7::text[])
+			or (m.status = 'failed' and m.error_code = $8 and $3 in ('sent', 'delivered'))
+		)
 		returning `+prefixCols("m.", messageCols)+`, prev.prev_status`,
-		id, deviceID, to, at, errorCode, errorMessage, from))
+		id, deviceID, to, at, errorCode, errorMessage, from, ErrorCodeInterrupted))
 }
 
 // StaleMessage is an in-flight message that went silent.
@@ -230,14 +242,19 @@ type StaleMessage struct {
 // MarkStaleUnknown flips to unknown the queued messages that became due
 // before releaseCutoff and were never fetched, and the dispatched messages
 // that the phone fetched but did not report on within staleCutoff of when
-// it was expected to have sent them.
+// it was expected to have sent them. A phone that has reported on any
+// message since staleCutoff is behind, not gone: its overdue messages are
+// left alone until they are older than releaseCutoff as well.
 func (s *Store) MarkStaleUnknown(ctx context.Context, staleCutoff, releaseCutoff time.Time) ([]StaleMessage, error) {
 	return many[StaleMessage](s.q.Query(ctx, `
 		with c as (
-			select id, status::text as prev_status from messages
-			where direction = 'outbound' and (
-				(status = 'queued' and coalesce(dispatch_due_at, created_at) < $2)
-				or (status = 'dispatched' and greatest(dispatched_at, coalesce(expected_send_at, dispatched_at)) < $1)
+			select m.id, m.status::text as prev_status from messages m
+			where m.direction = 'outbound' and (
+				(m.status = 'queued' and coalesce(m.dispatch_due_at, m.created_at) < $2)
+				or (m.status = 'dispatched'
+					and greatest(m.dispatched_at, coalesce(m.expected_send_at, m.dispatched_at)) < $1
+					and (greatest(m.dispatched_at, coalesce(m.expected_send_at, m.dispatched_at)) < $2
+						or not exists (select 1 from devices d where d.id = m.device_id and d.last_report_at >= $1)))
 			)
 			limit 1000
 		)
@@ -389,11 +406,15 @@ type MessageFilter struct {
 }
 
 // ListMessages returns up to Limit+1 rows so callers can detect another page.
-// Messages from unpaired devices are excluded.
+// Messages from unpaired devices are excluded from the history, but not
+// from a send asked for by id: its recipients are its own, whatever became
+// of the phone since.
 func (s *Store) ListMessages(ctx context.Context, userID uuid.UUID, f MessageFilter) ([]Message, error) {
 	args := []any{userID}
-	conds := []string{`m.user_id = $1`,
-		`not exists (select 1 from devices d where d.id = m.device_id and d.deleted_at is not null)`}
+	conds := []string{`m.user_id = $1`}
+	if f.BatchID == nil {
+		conds = append(conds, `not exists (select 1 from devices d where d.id = m.device_id and d.deleted_at is not null)`)
+	}
 	add := func(v any) string {
 		args = append(args, v)
 		return fmt.Sprintf("$%d", len(args))

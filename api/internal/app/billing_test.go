@@ -234,3 +234,57 @@ func TestBillingAllowlistAndRegion(t *testing.T) {
 		t.Fatalf("other country: %v", r.body)
 	}
 }
+
+// TestPendingPaymentBlocksASecondCheckout: while the bank is still
+// confirming the first payment the subscription is incomplete. It grants
+// nothing yet, and it must not be bought again from the same account.
+func TestPendingPaymentBlocksASecondCheckout(t *testing.T) {
+	t.Setenv("SIMHOOK_POLAR_ACCESS_TOKEN", "polar_oat_test")
+	t.Setenv("SIMHOOK_POLAR_WEBHOOK_SECRET", polarTestSecret)
+	h := startApp(t)
+	seedProducts(t, h)
+	c := h.signUp(t, "pending@example.com")
+	userID := str(c.must("GET", "/v1/auth/me", nil, 200).body, "user", "id")
+	now := time.Now().UTC().Truncate(time.Second)
+
+	pending := polarSubscription("sub_p", userID, "prod_pro_month", "incomplete", now, nil)
+	if status, body := polarDeliver(t, h, polarTestSecret, "wh_p1", pending); status != 202 {
+		t.Fatalf("pending delivery: %d %v", status, body)
+	}
+	if got := str(c.must("GET", "/v1/auth/me", nil, 200).body, "limits", "plan_id"); got != "free" {
+		t.Fatalf("an incomplete subscription grants nothing: %q", got)
+	}
+	r := c.must("GET", "/v1/billing", nil, 200)
+	if str(r.body, "subscription", "status") != "incomplete" || boolAt(r.body, "checkout", "available") || str(r.body, "checkout", "reason") != "subscribed" {
+		t.Fatalf("pending payment: %v", r.body)
+	}
+	if got := str(c.must("POST", "/v1/billing/checkout", map[string]any{"plan_id": "pro", "interval": "month"}, 409).body, "code"); got != "already_subscribed" {
+		t.Fatalf("a second checkout during a pending payment: %q", got)
+	}
+
+	// The bank confirms: the plan applies.
+	active := polarSubscription("sub_p", userID, "prod_pro_month", "active", now.Add(time.Minute), nil)
+	if status, _ := polarDeliver(t, h, polarTestSecret, "wh_p2", active); status != 202 {
+		t.Fatalf("activation: %d", status)
+	}
+	if got := str(c.must("GET", "/v1/auth/me", nil, 200).body, "limits", "plan_id"); got != "pro" {
+		t.Fatalf("plan after the payment settles: %q", got)
+	}
+
+	// Or it never does: the subscription expires and the account may buy again.
+	d := h.signUp(t, "declined@example.com")
+	dID := str(d.must("GET", "/v1/auth/me", nil, 200).body, "user", "id")
+	if status, _ := polarDeliver(t, h, polarTestSecret, "wh_d1", polarSubscription("sub_d", dID, "prod_pro_month", "incomplete", now, nil)); status != 202 {
+		t.Fatalf("pending delivery: %d", status)
+	}
+	if boolAt(d.must("GET", "/v1/billing", nil, 200).body, "checkout", "available") {
+		t.Fatal("a pending payment must not be bought twice")
+	}
+	expired := polarSubscription("sub_d", dID, "prod_pro_month", "incomplete_expired", now.Add(time.Minute), map[string]any{"ended_at": now.Add(time.Minute).Format(time.RFC3339)})
+	if status, _ := polarDeliver(t, h, polarTestSecret, "wh_d2", expired); status != 202 {
+		t.Fatalf("expiry: %d", status)
+	}
+	if r = d.must("GET", "/v1/billing", nil, 200); r.body["subscription"] != nil || !boolAt(r.body, "checkout", "available") {
+		t.Fatalf("after the payment failed for good: %v", r.body)
+	}
+}

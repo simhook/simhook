@@ -42,6 +42,7 @@ type Config struct {
 	SMTPFrom     string `env:"SIMHOOK_SMTP_FROM" envDefault:"simhook <noreply@localhost>"`
 
 	DispatchWaveSize         int `env:"SIMHOOK_DISPATCH_WAVE_SIZE" envDefault:"40"`
+	SendAckSeconds           int `env:"SIMHOOK_SEND_ACK_SECONDS" envDefault:"3"`
 	PushTTLSeconds           int `env:"SIMHOOK_PUSH_TTL_SECONDS" envDefault:"86400"`
 	StaleAfterMinutes        int `env:"SIMHOOK_STALE_AFTER_MINUTES" envDefault:"15"`
 	OfflineAfterMinutes      int `env:"SIMHOOK_OFFLINE_AFTER_MINUTES" envDefault:"45"`
@@ -115,6 +116,9 @@ func (c *Config) validate() error {
 	if c.DispatchWaveSize < 1 {
 		c.DispatchWaveSize = 1
 	}
+	if c.SendAckSeconds < 0 {
+		c.SendAckSeconds = 0
+	}
 	if c.SessionTTLHours < 1 {
 		return fmt.Errorf("config: SIMHOOK_SESSION_TTL_HOURS must be at least 1")
 	}
@@ -134,6 +138,15 @@ func (c *Config) validate() error {
 	}
 	c.BillingAllowlist = cleanList(c.BillingAllowlist, strings.ToLower)
 	c.BillingBlockedCountries = cleanList(c.BillingBlockedCountries, strings.ToUpper)
+	// An .env line like `SIMHOOK_BILLING_ALLOWLIST=   # emails` is read with
+	// the comment as its value, which would quietly refuse every checkout.
+	for name, list := range map[string][]string{"SIMHOOK_BILLING_ALLOWLIST": c.BillingAllowlist, "SIMHOOK_BILLING_BLOCKED_COUNTRIES": c.BillingBlockedCountries} {
+		for _, v := range list {
+			if strings.Contains(v, "#") {
+				return fmt.Errorf("config: %s holds %q, which looks like a comment; a comment after an empty value is read as the value, so put it on its own line", name, v)
+			}
+		}
+	}
 	c.CookieDomain = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(c.CookieDomain), "."))
 	if c.CookieDomain != "" {
 		// A flag set on a domain the dashboard is not under would never reach
@@ -230,6 +243,10 @@ func (c *Config) IsProduction() bool { return c.Env == "production" }
 func (c *Config) SecureCookies() bool {
 	return strings.HasPrefix(strings.ToLower(c.PublicURL), "https://")
 }
+
+// SendAck is what the carrier's acknowledgement adds to each send, on top
+// of the phone's own delay, when working out when a phone will be done.
+func (c *Config) SendAck() time.Duration { return time.Duration(c.SendAckSeconds) * time.Second }
 
 // PushTTL is how long the push provider may hold an undelivered push.
 func (c *Config) PushTTL() time.Duration { return time.Duration(c.PushTTLSeconds) * time.Second }

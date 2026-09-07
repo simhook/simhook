@@ -363,7 +363,7 @@ export interface paths {
         };
         /**
          * Get a send
-         * @description The batch plus one message per recipient. Poll this to follow a send.
+         * @description The batch plus one message per recipient. Poll this to follow a send; with messages=false it is the batch and its counters alone, and the recipients are pages of GET /v1/messages?batch_id=.
          */
         get: operations["get-batch"];
         put?: never;
@@ -2259,7 +2259,10 @@ export interface operations {
     };
     "get-batch": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Include one message per recipient. Pass false to poll only the batch and its counters, which is what to do while a large send is moving. */
+                messages?: boolean;
+            };
             header?: never;
             path: {
                 id: string;

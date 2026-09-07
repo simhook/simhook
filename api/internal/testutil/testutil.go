@@ -1,12 +1,16 @@
 // Package testutil prepares a real Postgres database for integration tests.
-// Tests need SIMHOOK_TEST_DATABASE_URL or the dev compose database.
+// Tests need the dev compose database, or SIMHOOK_TEST_ADMIN_URL pointing at
+// a server where the user may create databases.
 package testutil
 
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -26,7 +30,12 @@ var (
 )
 
 // DatabaseURL returns the test database URL, creating and migrating the
-// database on first use. It skips the test when Postgres is unreachable.
+// database on first use. Every package gets a database of its own, named
+// after its directory, because go test runs packages in parallel and Reset
+// truncates: one shared database had packages emptying each other's rows
+// mid-test. SIMHOOK_TEST_DATABASE_URL points every package at one database
+// instead, which is only safe under go test -p 1. The test is skipped when
+// Postgres is unreachable.
 func DatabaseURL(t *testing.T) string {
 	t.Helper()
 	prepareOnce.Do(func() {
@@ -36,7 +45,12 @@ func DatabaseURL(t *testing.T) string {
 		}
 		testURL = os.Getenv("SIMHOOK_TEST_DATABASE_URL")
 		if testURL == "" {
-			testURL = strings.Replace(adminURL, "/postgres?", "/simhook_test?", 1)
+			testURL = strings.Replace(adminURL, "/postgres?", "/"+packageDatabase()+"?", 1)
+		}
+		name, err := databaseName(testURL)
+		if err != nil {
+			prepareErr = err
+			return
 		}
 		ctx := context.Background()
 		conn, err := pgx.Connect(ctx, adminURL)
@@ -46,12 +60,12 @@ func DatabaseURL(t *testing.T) string {
 		}
 		defer conn.Close(ctx)
 		var exists bool
-		if err := conn.QueryRow(ctx, `select exists(select 1 from pg_database where datname = 'simhook_test')`).Scan(&exists); err != nil {
+		if err := conn.QueryRow(ctx, `select exists(select 1 from pg_database where datname = $1)`, name).Scan(&exists); err != nil {
 			prepareErr = err
 			return
 		}
 		if !exists {
-			if _, err := conn.Exec(ctx, `create database simhook_test`); err != nil {
+			if _, err := conn.Exec(ctx, `create database `+pgx.Identifier{name}.Sanitize()); err != nil {
 				prepareErr = err
 				return
 			}
@@ -68,6 +82,41 @@ func DatabaseURL(t *testing.T) string {
 		t.Skipf("postgres not available for integration tests: %v", prepareErr)
 	}
 	return testURL
+}
+
+// packageDatabase names the database for the package under test after the
+// directory go test runs it in: simhook_test_internal_app, and so on.
+func packageDatabase() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "simhook_test"
+	}
+	return "simhook_test_" + identifier(filepath.Base(filepath.Dir(wd))) + "_" + identifier(filepath.Base(wd))
+}
+
+// identifier keeps what Postgres allows in an unquoted name.
+func identifier(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
+}
+
+func databaseName(dbURL string) (string, error) {
+	u, err := url.Parse(dbURL)
+	if err != nil {
+		return "", err
+	}
+	name := strings.TrimPrefix(u.Path, "/")
+	if name == "" {
+		return "", fmt.Errorf("testutil: %q names no database", dbURL)
+	}
+	return name, nil
 }
 
 // Reset empties every table that tests write to. Plans stay seeded.

@@ -124,7 +124,10 @@ func (s *Service) checkoutReason(ctx context.Context, user store.User, country s
 	if s.cfg.RequireEmailVerification && user.EmailVerifiedAt == nil {
 		return ReasonVerifyEmail
 	}
-	if live != nil && live.Provider != nil && store.SubscriptionLive(live.Status) {
+	// Any subscription the provider still holds open blocks a new checkout,
+	// whatever its status: a payment the bank is still confirming must not
+	// be bought twice.
+	if live != nil && live.Provider != nil {
 		return ReasonSubscribed
 	}
 	return ""

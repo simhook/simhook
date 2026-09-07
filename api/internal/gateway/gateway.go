@@ -407,11 +407,16 @@ func (s *Service) ListBatches(ctx context.Context, userID uuid.UUID, cursor *sto
 	return page, nil
 }
 
-// GetBatch returns a send and its messages.
-func (s *Service) GetBatch(ctx context.Context, userID, id uuid.UUID) (store.Batch, []store.Message, error) {
+// GetBatch returns a send and, when asked, its messages. Without them the
+// answer stays small however large the send, which is what a page that
+// polls the counters wants.
+func (s *Service) GetBatch(ctx context.Context, userID, id uuid.UUID, withMessages bool) (store.Batch, []store.Message, error) {
 	b, err := s.st.GetUserBatch(ctx, userID, id)
 	if err != nil {
 		return store.Batch{}, nil, err
+	}
+	if !withMessages {
+		return b, []store.Message{}, nil
 	}
 	msgs, err := s.st.ListBatchMessages(ctx, userID, id)
 	return b, msgs, err

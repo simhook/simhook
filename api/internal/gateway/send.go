@@ -16,6 +16,7 @@ import (
 	"github.com/simhook/simhook/internal/billing"
 	"github.com/simhook/simhook/internal/ids"
 	"github.com/simhook/simhook/internal/push"
+	"github.com/simhook/simhook/internal/sms"
 	"github.com/simhook/simhook/internal/store"
 	"github.com/simhook/simhook/internal/webhooks"
 )
@@ -140,13 +141,13 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 		return SendResult{}, err
 	}
 
-	sendDelay := time.Duration(device.SendDelaySeconds) * time.Second
-	waves := planWaves(len(recipients), s.cfg.DispatchWaveSize, sendDelay, base)
+	perMessage := s.pacing(time.Duration(device.SendDelaySeconds)*time.Second, sms.Segments(body))
+	waves := planWaves(len(recipients), s.cfg.DispatchWaveSize, perMessage, base)
 	// When the phone should be done, given its pacing. Only omitted when the
-	// send is already expected to be over, which a zero delay makes possible.
+	// send is already expected to be over.
 	var estimated *time.Time
 	last := waves[len(waves)-1]
-	if finish := last.due.Add(time.Duration(last.end-last.start) * sendDelay); finish.After(now) {
+	if finish := last.due.Add(time.Duration(last.end-last.start) * perMessage); finish.After(now) {
 		estimated = &finish
 	}
 	var scheduled *time.Time
@@ -183,7 +184,7 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 			// its pace, so each message has its own expected send time.
 			expected := make([]time.Time, len(waveIDs))
 			for i := range waveIDs {
-				expected[i] = w.due.Add(time.Duration(i) * sendDelay)
+				expected[i] = w.due.Add(time.Duration(i) * perMessage)
 			}
 			if err := st.StampDispatch(ctx, waveIDs, w.due, expected); err != nil {
 				return err
@@ -204,6 +205,23 @@ func (s *Service) Send(ctx context.Context, user store.User, apiKeyID *uuid.UUID
 	return SendResult{Batch: batch, MessageIDs: msgIDs}, nil
 }
 
+// segmentInterval is the platform's ceiling for an app that is not the
+// phone's messenger: Android allows it 30 segments a minute, so a message of
+// n segments cannot leave faster than n of these, whatever the delay says.
+const segmentInterval = 2 * time.Second
+
+// pacing is how long the phone needs per message of this size: its own
+// delay plus the carrier's acknowledgement it waits for first, or the
+// segment ceiling, whichever is longer. A zero delay is a real setting; the
+// acknowledgement keeps the schedule from collapsing onto one instant.
+func (s *Service) pacing(delay time.Duration, segments int) time.Duration {
+	per := delay + s.cfg.SendAck()
+	if floor := time.Duration(max(segments, 1)) * segmentInterval; floor > per {
+		per = floor
+	}
+	return per
+}
+
 type wave struct {
 	start, end int
 	due        time.Time
@@ -212,11 +230,11 @@ type wave struct {
 // planWaves releases a batch to one phone in slices spaced by how long the
 // phone needs to send the previous slice, so pushes never pile up ahead of
 // what the phone can actually send.
-func planWaves(n, size int, sendDelay time.Duration, base time.Time) []wave {
+func planWaves(n, size int, perMessage time.Duration, base time.Time) []wave {
 	if size < 1 {
 		size = 1
 	}
-	spacing := time.Duration(size) * sendDelay
+	spacing := time.Duration(size) * perMessage
 	var waves []wave
 	for start, i := 0, 0; start < n; start, i = start+size, i+1 {
 		waves = append(waves, wave{start: start, end: min(start+size, n), due: base.Add(time.Duration(i) * spacing)})
@@ -267,14 +285,15 @@ func (w *DispatchWorker) Work(ctx context.Context, job *river.Job[DispatchArgs])
 const (
 	CodeDeviceUnpaired = "device_unpaired"
 	CodeDeviceDisabled = "device_disabled"
-	CodeNoPushToken    = "no_push_token"
-	CodePushRejected   = "push_rejected"
 )
 
 // dispatch wakes the phone for one wave. The push carries no message
 // content, only which phone should fetch its outbox; the messages stay
-// queued until the phone does. Whatever still cannot reach a phone fails
-// here with a reason.
+// queued until the phone does. A phone that cannot be woken, because it
+// has no push registration or the push service rejects it, is not a
+// failure: it fetches its outbox at its next check-in, and the messages
+// wait for that, up to the push's lifetime, as they would for a phone that
+// is away. Only a phone that is gone or switched off fails them.
 func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 	rows, err := s.st.LoadQueuedForDispatch(ctx, args.MessageIDs)
 	if err != nil {
@@ -292,11 +311,12 @@ func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 		}
 		return err
 	}
-	switch {
-	case !device.Enabled:
+	if !device.Enabled {
 		return s.failQueued(ctx, args.BatchID, idsOf(rows), CodeDeviceDisabled, "The phone is disabled. Enable it in the dashboard or the app.", now)
-	case device.PushToken == nil || device.PushTokenInvalidatedAt != nil:
-		return s.failQueued(ctx, args.BatchID, idsOf(rows), CodeNoPushToken, "The phone has no valid push registration. Open the app to reconnect it.", now)
+	}
+	if device.PushToken == nil || device.PushTokenInvalidatedAt != nil {
+		s.log.Info("wave waits for the phone's check-in", "device", device.ID, "messages", len(rows), "reason", "no push registration")
+		return nil
 	}
 
 	results, err := s.push.Send(ctx, []push.Message{{
@@ -313,10 +333,11 @@ func (s *Service) dispatch(ctx context.Context, args DispatchArgs) error {
 		return nil
 	}
 	if r.TokenInvalid {
-		// The device is marked before the messages fail, so anyone who sees
-		// a failed batch also sees why on the device.
+		// The device is marked, so the dashboard says why the phone is slow
+		// to send; the messages wait for its next check-in.
 		_ = s.st.InvalidatePushToken(ctx, device.ID, "rejected by push service")
-		return s.failQueued(ctx, args.BatchID, idsOf(rows), CodePushRejected, "The phone's push registration is no longer valid. Open the app to reconnect it.", now)
+		s.log.Info("wave waits for the phone's check-in", "device", device.ID, "messages", len(rows), "reason", "push rejected")
+		return nil
 	}
 	// A passing refusal: the job retries, and the phone fetches its outbox
 	// on its next check-in regardless.

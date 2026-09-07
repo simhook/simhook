@@ -3056,7 +3056,7 @@
     },
     "/v1/batches/{id}": {
       "get": {
-        "description": "The batch plus one message per recipient. Poll this to follow a send.",
+        "description": "The batch plus one message per recipient. Poll this to follow a send; with messages=false it is the batch and its counters alone, and the recipients are pages of GET /v1/messages?batch_id=.",
         "operationId": "get-batch",
         "parameters": [
           {
@@ -3065,6 +3065,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "description": "Include one message per recipient. Pass false to poll only the batch and its counters, which is what to do while a large send is moving.",
+            "explode": false,
+            "in": "query",
+            "name": "messages",
+            "schema": {
+              "default": true,
+              "description": "Include one message per recipient. Pass false to poll only the batch and its counters, which is what to do while a large send is moving.",
+              "type": "boolean"
             }
           }
         ],

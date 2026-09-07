@@ -42,3 +42,20 @@ func TestPolarEnvironmentValidated(t *testing.T) {
 		t.Fatalf("got %q %v", cfg.PolarEnvironment, cfg.BillingAllowlist)
 	}
 }
+
+// TestCommentReadAsListIsRefused: an .env line with a comment after an empty
+// value reaches the process with the comment as the value. Loudly refusing
+// it beats an allowlist of nobody that quietly turns every checkout away.
+func TestCommentReadAsListIsRefused(t *testing.T) {
+	t.Setenv("SIMHOOK_DATABASE_URL", "postgres://x")
+	t.Setenv("SIMHOOK_SECRET_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	t.Setenv("SIMHOOK_BILLING_ALLOWLIST", "# comma-separated emails; set, only these accounts can buy")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "comment") {
+		t.Fatalf("a comment read as the allowlist must be refused, got %v", err)
+	}
+	t.Setenv("SIMHOOK_BILLING_ALLOWLIST", "")
+	t.Setenv("SIMHOOK_BILLING_BLOCKED_COUNTRIES", "# comma-separated ISO codes")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "SIMHOOK_BILLING_BLOCKED_COUNTRIES") {
+		t.Fatalf("a comment read as the blocked countries must be refused, got %v", err)
+	}
+}

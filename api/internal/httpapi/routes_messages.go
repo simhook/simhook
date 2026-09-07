@@ -56,6 +56,11 @@ type messageIDInput struct {
 	ID string `path:"id"`
 }
 
+type batchInput struct {
+	ID       string `path:"id"`
+	Messages bool   `query:"messages" default:"true" doc:"Include one message per recipient. Pass false to poll only the batch and its counters, which is what to do while a large send is moving."`
+}
+
 type messageOutput struct {
 	Body struct {
 		Message store.Message `json:"message"`
@@ -243,8 +248,8 @@ func (s *Server) registerMessages() {
 		OperationID: "get-batch", Method: http.MethodGet, Path: "/v1/batches/{id}",
 		Extensions: scoped(auth.ScopeRead),
 		Summary:    "Get a send", Tags: tags, Security: securityUser,
-		Description: "The batch plus one message per recipient. Poll this to follow a send.",
-	}, func(ctx context.Context, in *messageIDInput) (*batchOutput, error) {
+		Description: "The batch plus one message per recipient. Poll this to follow a send; with messages=false it is the batch and its counters alone, and the recipients are pages of GET /v1/messages?batch_id=.",
+	}, func(ctx context.Context, in *batchInput) (*batchOutput, error) {
 		p, err := requireUser(ctx, auth.ScopeRead)
 		if err != nil {
 			return nil, err
@@ -253,7 +258,7 @@ func (s *Server) registerMessages() {
 		if !ok {
 			return nil, apiErr(http.StatusNotFound, "not_found", "No such batch.")
 		}
-		b, msgs, err := s.deps.Gateway.GetBatch(ctx, p.User.ID, id)
+		b, msgs, err := s.deps.Gateway.GetBatch(ctx, p.User.ID, id, in.Messages)
 		if err != nil {
 			return nil, mapErr(ctx, s.deps.Log, err)
 		}

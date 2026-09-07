@@ -350,6 +350,13 @@ func (s *Store) ListDevicesToProbe(ctx context.Context, cutoff time.Time) ([]Dev
 		limit 2000`, cutoff))
 }
 
+// TouchDeviceReport records that the phone reported on a message, whatever
+// became of the report.
+func (s *Store) TouchDeviceReport(ctx context.Context, id uuid.UUID) error {
+	_, err := s.q.Exec(ctx, `update devices set last_report_at = now() where id = $1`, id)
+	return err
+}
+
 // AddDeviceCounts bumps the lifetime counters.
 func (s *Store) AddDeviceCounts(ctx context.Context, id uuid.UUID, sent, received int) error {
 	_, err := s.q.Exec(ctx, `update devices set sent_count = sent_count + $2, received_count = received_count + $3 where id = $1`,

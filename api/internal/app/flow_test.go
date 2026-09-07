@@ -575,16 +575,25 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("a scheduled send must not count today: %s", r.raw)
 	}
 
-	// Invalid push token fails the message and invalidates the device token.
+	// A push the service rejects marks the device, and the message waits
+	// for the phone's next check-in rather than failing.
 	h.pusher.reject["tok-1"] = true
 	r = dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+14155551000"}, "body": "x"}, 202)
+	rejectedBatch, rejectedID := str(r.body, "batch", "id"), r.body["message_ids"].([]any)[0]
 	waitFor(t, "push rejection recorded", func() bool {
-		b := dev.must("GET", "/v1/batches/"+str(r.body, "batch", "id"), nil, 200)
-		return str(b.body, "batch", "status") == "failed"
+		d := dev.must("GET", "/v1/devices/"+deviceID, nil, 200)
+		return d.body["device"].(map[string]any)["push_token_invalidated_at"] != nil
 	})
-	r = dev.must("GET", "/v1/devices/"+deviceID, nil, 200)
-	if r.body["device"].(map[string]any)["push_token_invalidated_at"] == nil {
-		t.Fatalf("push token should be invalidated: %s", r.raw)
+	if b := dev.must("GET", "/v1/batches/"+rejectedBatch, nil, 200); str(b.body, "batch", "status") != "queued" {
+		t.Fatalf("a rejected push must not fail the send: %s", b.raw)
+	}
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	waiting := false
+	for _, m := range r.body["data"].([]any) {
+		waiting = waiting || m.(map[string]any)["id"] == rejectedID
+	}
+	if !waiting {
+		t.Fatalf("the phone's check-in should find the send waiting: %s", r.raw)
 	}
 
 	// The phone can unpair itself, which revokes its token; the dashboard

@@ -25,7 +25,9 @@ import (
 // allowedFrom lists which states a report may move a message out of. Reports
 // that arrive out of order (a late "sent" after "delivered") are ignored
 // rather than moving the message backwards. A message the sweep gave up on
-// (unknown) is resolved by a late truthful report.
+// (unknown) is resolved by a late truthful report, and so is one the phone
+// reported failed because its radio went quiet (error code interrupted),
+// which the store lets a sent or delivered report move on.
 var allowedFrom = map[string][]string{
 	store.StatusSent:      {store.StatusQueued, store.StatusDispatched, store.StatusUnknown},
 	store.StatusDelivered: {store.StatusQueued, store.StatusDispatched, store.StatusSent, store.StatusUnknown},
@@ -55,6 +57,11 @@ func (s *Service) ReportStatus(ctx context.Context, device store.Device, message
 	if status == store.StatusFailed && (errorCode == nil || *errorCode == "") {
 		code := "send_failed"
 		errorCode = &code
+	}
+	// A report, whatever it says, is the phone at work; the stale sweep
+	// leaves a phone that is demonstrably working alone.
+	if err := s.st.TouchDeviceReport(ctx, device.ID); err != nil {
+		return store.Message{}, err
 	}
 	var out store.Message
 	err := s.st.Tx(ctx, func(tx pgx.Tx, st *store.Store) error {
