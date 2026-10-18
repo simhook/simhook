@@ -33,3 +33,19 @@ class FingerprintTest {
         assertEquals("short", SmsReceivedReceiver.truncate("short"))
     }
 }
+
+class CleanTest {
+    @Test
+    fun nulIsDroppedAndNothingElseChanges() {
+        assertEquals("Kodunuz 4821", SmsReceivedReceiver.clean("Kod\u0000unuz 4821"))
+        assertEquals("", SmsReceivedReceiver.clean("\u0000\u0000"))
+        val untouched = "Kodunuz 4821. İyi günler 😀"
+        assertEquals(untouched, SmsReceivedReceiver.clean(untouched))
+    }
+
+    @Test
+    fun fingerprintIsTakenOverTheCleanedText() {
+        val cleaned = SmsReceivedReceiver.fingerprint("TURKCELL", SmsReceivedReceiver.clean("Kod\u0000unuz"), 1L)
+        assertEquals(SmsReceivedReceiver.fingerprint("TURKCELL", "Kodunuz", 1L), cleaned)
+    }
+}

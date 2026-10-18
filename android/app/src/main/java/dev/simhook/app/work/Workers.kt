@@ -33,6 +33,7 @@ import dev.simhook.app.outbox.OutboxMessage
 import dev.simhook.app.outbox.PendingReport
 import dev.simhook.app.push.Push
 import dev.simhook.app.sms.SimInfo
+import dev.simhook.app.sms.SmsReceivedReceiver
 import java.io.IOException
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -240,7 +241,11 @@ object HeartbeatScheduler {
 object ReportLedger {
     suspend fun status(context: Context, container: AppContainer, messageId: String, status: String, at: Long, code: String?, message: String?) {
         container.reports.insert(
-            PendingReport(kind = PendingReport.KIND_STATUS, messageId = messageId, status = status, errorCode = code, errorMessage = message, at = at, createdAt = System.currentTimeMillis()),
+            PendingReport(
+                kind = PendingReport.KIND_STATUS, messageId = messageId, status = status,
+                errorCode = code?.let(SmsReceivedReceiver::clean), errorMessage = message?.let(SmsReceivedReceiver::clean),
+                at = at, createdAt = System.currentTimeMillis(),
+            ),
         )
         ReportUploadWorker.enqueue(context)
     }
@@ -256,37 +261,81 @@ object ReportLedger {
     }
 }
 
-/** Uploads the ledger, oldest first. */
+/** What to do with a report the server did not take. */
+enum class ReportOutcome {
+    /** The server will never take it: let it go. */
+    DROP,
+    /** The server failed on it just now: leave it in place and carry on with the rest. */
+    SKIP,
+    /** Nothing more will get through right now: end this run and come back later. */
+    STOP,
+    /** The device token is dead, and with it everything owed under it. */
+    LOST_PAIRING,
+}
+
+/**
+ * Uploads the ledger, oldest first. A report the server refuses outright is
+ * dropped, since it will never take it. One the server fails on is left
+ * where it is and the run moves on to the next, so a single text the server
+ * cannot store does not hold every later text and status report hostage;
+ * a report that keeps failing for long enough is let go too. Several
+ * server failures in a row mean the server itself is away, and the run
+ * stops for the network to come back or the backoff to pass.
+ */
 object ReportUploader {
     private const val PAGE = 50
 
-    /**
-     * Sends what it can and returns true when the ledger is empty. A report
-     * the server refuses outright is dropped, since it will never take it;
-     * anything else stops the run and waits for the next.
-     */
+    /** Attempts after which a report the server keeps failing on is dropped: about two days of check-ins. */
+    const val MAX_ATTEMPTS = 100
+
+    /** Server failures in a row that say the server, not the report, is the problem. */
+    const val SERVER_AWAY_AFTER = 3
+
+    /** Decides what a failed upload means for the report, given how often it has failed before. */
+    fun outcome(e: ApiException, attempts: Int): ReportOutcome = when {
+        e.isAuthFailure -> ReportOutcome.LOST_PAIRING
+        e.status == 408 || e.status == 429 -> ReportOutcome.STOP
+        e.status in 400..499 -> ReportOutcome.DROP
+        attempts + 1 >= MAX_ATTEMPTS -> ReportOutcome.DROP
+        else -> ReportOutcome.SKIP
+    }
+
+    /** Sends what it can and returns true when nothing is left waiting. */
     suspend fun flush(container: AppContainer): Boolean {
         val dao = container.reports
+        var after = 0L
+        var leftBehind = false
+        var serverFailures = 0
         while (true) {
-            val batch = dao.oldest(PAGE)
-            if (batch.isEmpty()) return true
+            val batch = dao.oldestAfter(after, PAGE)
+            if (batch.isEmpty()) return !leftBehind
             for (r in batch) {
+                after = r.id
                 try {
                     send(container, r)
                     dao.delete(r.id)
+                    serverFailures = 0
                 } catch (e: ApiException) {
-                    if (e.isAuthFailure) {
-                        // The pairing is gone, and with it everything owed under it.
-                        container.handleLostPairing()
-                        return true
+                    when (outcome(e, r.attempts)) {
+                        ReportOutcome.LOST_PAIRING -> {
+                            container.handleLostPairing()
+                            return true
+                        }
+                        ReportOutcome.DROP -> {
+                            Log.w(TAG, "report ${r.id} (${r.kind}) dropped after ${r.attempts + 1} attempts: ${e.status} ${e.code}")
+                            dao.delete(r.id)
+                        }
+                        ReportOutcome.STOP -> {
+                            dao.bump(r.id)
+                            return false
+                        }
+                        ReportOutcome.SKIP -> {
+                            Log.w(TAG, "report ${r.id} (${r.kind}) left for later: ${e.status} ${e.code}")
+                            dao.bump(r.id)
+                            leftBehind = true
+                            if (++serverFailures >= SERVER_AWAY_AFTER) return false
+                        }
                     }
-                    if (e.status in 400..499 && e.status != 408 && e.status != 429) {
-                        Log.w(TAG, "report ${r.id} (${r.kind}) refused by the server: ${e.code}")
-                        dao.delete(r.id)
-                        continue
-                    }
-                    dao.bump(r.id)
-                    return false
                 } catch (e: IOException) {
                     dao.bump(r.id)
                     return false
