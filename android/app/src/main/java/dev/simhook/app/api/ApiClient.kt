@@ -3,14 +3,20 @@ package dev.simhook.app.api
 import android.util.Log
 import dev.simhook.app.core.AppJson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Raised for any non-2xx response. [code] is the server's stable error
@@ -101,7 +107,7 @@ class ApiClient(
                 val token = deviceToken() ?: throw ApiException(401, "not_paired", "This phone is not paired.", fromServer = false)
                 builder.header("Authorization", "Bearer $token")
             }
-            http.newCall(builder.build()).execute().use { response ->
+            http.newCall(builder.build()).await().use { response ->
                 val text = response.body.string()
                 if (!response.isSuccessful) {
                     val parsed = runCatching { AppJson.decodeFromString(ApiErrorBody.serializer(), text) }.getOrNull()
@@ -127,4 +133,23 @@ class ApiClient(
         private const val TAG = "ApiClient"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
+}
+
+/**
+ * Runs the call and suspends until it answers. Cancelling the coroutine
+ * cancels the call, so a caller on a time budget, such as a receiver
+ * uploading inside its broadcast, is not left waiting out the socket
+ * timeouts.
+ */
+private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
+    enqueue(object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            cont.resume(response) { _, _, _ -> response.close() }
+        }
+
+        override fun onFailure(call: Call, e: IOException) {
+            if (!cont.isCancelled) cont.resumeWithException(e)
+        }
+    })
+    cont.invokeOnCancellation { runCatching { cancel() } }
 }
