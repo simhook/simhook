@@ -21,5 +21,10 @@
     "@fontsource/instrument-sans": "^5.3.0",
     "satori": "^0.33.4",
     "sharp": "^0.35.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "js-yaml@<4.3.2": "4.3.2"
+    }
   }
 }
