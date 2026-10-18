@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/riverqueue/river"
 
+	"github.com/simhook/simhook/internal/clean"
 	"github.com/simhook/simhook/internal/ids"
 	"github.com/simhook/simhook/internal/push"
 	"github.com/simhook/simhook/internal/store"
@@ -47,6 +48,7 @@ var statusEvent = map[string]string{
 // webhook fan-out commit together.
 func (s *Service) ReportStatus(ctx context.Context, device store.Device, messageID uuid.UUID, status string, at time.Time, errorCode, errorMessage *string) (store.Message, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
+	errorCode, errorMessage = clean.TextPtr(errorCode), clean.TextPtr(errorMessage)
 	from, ok := allowedFrom[status]
 	if !ok {
 		return store.Message{}, &ValidationError{Field: "status", Message: "must be sent, delivered, or failed"}
@@ -151,10 +153,11 @@ type InboundInput struct {
 // ReportInbound stores a received SMS. The second return is false when the
 // same message was already stored.
 func (s *Service) ReportInbound(ctx context.Context, device store.Device, in InboundInput) (store.Message, bool, error) {
-	sender := strings.TrimSpace(in.Sender)
+	sender := strings.TrimSpace(clean.Text(in.Sender))
 	if sender == "" {
 		return store.Message{}, false, &ValidationError{Field: "sender", Message: "required"}
 	}
+	in.Body = clean.Text(in.Body)
 	if in.Body == "" {
 		return store.Message{}, false, &ValidationError{Field: "body", Message: "required"}
 	}
@@ -209,6 +212,8 @@ type HeartbeatInput struct {
 // settings. A device that was offline emits device.online, once, however
 // many check-ins race.
 func (s *Service) Heartbeat(ctx context.Context, device store.Device, in HeartbeatInput) (store.Device, error) {
+	in.PushToken, in.AppVersionName, in.OSVersion = clean.TextPtr(in.PushToken), clean.TextPtr(in.AppVersionName), clean.TextPtr(in.OSVersion)
+	in.Telemetry, in.Sims = clean.JSON(in.Telemetry), clean.JSON(in.Sims)
 	if in.PushToken != nil && strings.TrimSpace(*in.PushToken) == "" {
 		in.PushToken = nil
 	}
@@ -224,7 +229,7 @@ func (s *Service) Heartbeat(ctx context.Context, device store.Device, in Heartbe
 
 // RefreshPushToken stores a new push registration.
 func (s *Service) RefreshPushToken(ctx context.Context, device store.Device, token string) error {
-	token = strings.TrimSpace(token)
+	token = strings.TrimSpace(clean.Text(token))
 	if token == "" {
 		return &ValidationError{Field: "token", Message: "required"}
 	}

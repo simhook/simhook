@@ -5,8 +5,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/simhook/simhook/internal/auth"
 	"github.com/simhook/simhook/internal/billing"
@@ -175,6 +177,15 @@ func mapErr(ctx context.Context, log *slog.Logger, err error) error {
 		return apiErr(http.StatusServiceUnavailable, "unavailable", "The service is starting up. Try again in a moment.")
 	case errors.Is(err, context.Canceled):
 		return apiErr(499, "client_closed", "The client closed the request.")
+	}
+	// SQLSTATE class 22 is a data exception: the request carried a value
+	// Postgres cannot hold, such as a NUL byte in text. Refusing it once
+	// tells a phone to drop the report instead of retrying it forever, and
+	// everything queued behind it on the phone can move again.
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && strings.HasPrefix(pgErr.Code, "22") {
+		log.WarnContext(ctx, "request data refused by the database", "sqlstate", pgErr.Code, "err", pgErr.Message)
+		return apiErr(http.StatusUnprocessableEntity, "validation_failed", "The request holds a value that cannot be stored.")
 	}
 	log.ErrorContext(ctx, "unhandled error", "err", err)
 	return apiErr(http.StatusInternalServerError, "internal_error", "Something went wrong on our side.")
