@@ -17,6 +17,7 @@ import (
 	"github.com/riverqueue/river/rivertype"
 
 	"github.com/simhook/simhook/internal/billing"
+	"github.com/simhook/simhook/internal/clean"
 	"github.com/simhook/simhook/internal/config"
 	"github.com/simhook/simhook/internal/ids"
 	"github.com/simhook/simhook/internal/push"
@@ -133,6 +134,9 @@ type PairInput struct {
 // Pair exchanges a code for a device and a device token. The same hardware
 // on the same account re-pairs to its existing device row.
 func (s *Service) Pair(ctx context.Context, in PairInput) (store.Device, string, error) {
+	in.HardwareKey = clean.Text(in.HardwareKey)
+	in.Name, in.Manufacturer, in.Brand, in.Model = clean.TextPtr(in.Name), clean.TextPtr(in.Manufacturer), clean.TextPtr(in.Brand), clean.TextPtr(in.Model)
+	in.BuildID, in.OSVersion, in.AppVersionName, in.PushToken = clean.TextPtr(in.BuildID), clean.TextPtr(in.OSVersion), clean.TextPtr(in.AppVersionName), clean.TextPtr(in.PushToken)
 	if strings.TrimSpace(in.HardwareKey) == "" {
 		return store.Device{}, "", &ValidationError{Field: "hardware_key", Message: "required"}
 	}
@@ -255,7 +259,7 @@ type DevicePatch struct {
 
 func (p DevicePatch) validate() error {
 	if p.Name != nil {
-		n := strings.TrimSpace(*p.Name)
+		n := strings.TrimSpace(clean.Text(*p.Name))
 		if n == "" || len(n) > 64 {
 			return &ValidationError{Field: "name", Message: "must be 1 to 64 characters"}
 		}

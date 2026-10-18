@@ -1121,3 +1121,51 @@ func TestTurnstile(t *testing.T) {
 	}
 	web.must("POST", "/v1/auth/password-reset/request", map[string]any{"email": "bot@example.com", "turnstile_token": "human"}, 202)
 }
+
+// TestPhoneReportsSurviveNUL covers a handset whose SMS decoder yields U+0000.
+// Postgres refuses the byte, and before the gateway stripped it one such text
+// failed to store forever while the phone retried it, with every later report
+// stuck in line behind it.
+func TestPhoneReportsSurviveNUL(t *testing.T) {
+	h := startApp(t)
+	web := &client{t: t, base: h.srv.URL}
+	r := web.must("POST", "/v1/auth/register", map[string]any{"email": "nul@example.com", "password": "hunter2hunter2", "name": "Nul"}, 201)
+	web.cookie = r.cookie
+	web.must("POST", "/v1/auth/verify-email", map[string]any{"code": h.mailer.lastCode(t)}, 200)
+	r = web.must("POST", "/v1/api-keys", map[string]any{"name": "ci"}, 201)
+	dev := &client{t: t, base: h.srv.URL, apiKey: str(r.body, "key")}
+	phone, _ := h.pairPhone(t, dev, "hw-oppo-0001", "push-oppo")
+
+	// A received text with NUL in both the sender and the body.
+	in := map[string]any{"sender": "TURKCELL\u0000", "body": "Kod\u0000unuz 4821", "received_at": time.Now().UTC().Format(time.RFC3339), "fingerprint": "fp-nul"}
+	r = phone.must("POST", "/v1/device/inbound", in, 201)
+	if str(r.body, "message", "body") != "Kodunuz 4821" || str(r.body, "message", "sender") != "TURKCELL" {
+		t.Fatalf("NUL not stripped from the stored text: %s", r.raw)
+	}
+	r = dev.must("GET", "/v1/messages?direction=inbound", nil, 200)
+	if n := len(r.body["data"].([]any)); n != 1 {
+		t.Fatalf("want the text stored once, got %d", n)
+	}
+	// A text that is nothing but NUL has nothing to store and is refused, not retried.
+	phone.must("POST", "/v1/device/inbound", map[string]any{"sender": "X", "body": "\u0000", "received_at": time.Now().UTC().Format(time.RFC3339)}, 422)
+
+	// The same byte inside the heartbeat's jsonb documents and text fields.
+	phone.must("POST", "/v1/device/heartbeat", map[string]any{
+		"os_version": "13\u0000",
+		"telemetry":  map[string]any{"timezone": "Europe/Istanbul\u0000", "uptime_ms": 1867719143},
+		"sims":       []any{map[string]any{"subscription_id": 1, "carrier": "Turk\u0000cell"}},
+	}, 200)
+
+	// And in a status report's error text.
+	dev.must("POST", "/v1/messages", map[string]any{"to": []string{"+15550001"}, "body": "x"}, 202)
+	r = phone.must("GET", "/v1/device/outbox", nil, 200)
+	rows := r.body["data"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("want one message in the outbox, got %d", len(rows))
+	}
+	id := str(rows[0].(map[string]any), "id")
+	r = phone.must("POST", "/v1/device/messages/"+id+"/status", map[string]any{"status": "failed", "error_code": "generic\u0000_failure", "error_message": "Radio\u0000 said no"}, 200)
+	if str(r.body, "message", "error_code") != "generic_failure" || str(r.body, "message", "error_message") != "Radio said no" {
+		t.Fatalf("NUL not stripped from the status report: %s", r.raw)
+	}
+}
