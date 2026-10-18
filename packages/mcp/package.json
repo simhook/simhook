@@ -45,7 +45,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@simhook/sdk": "workspace:^",
     "zod": "^4.5.4"
   },
