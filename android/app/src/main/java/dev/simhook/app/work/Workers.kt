@@ -14,6 +14,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -35,6 +36,10 @@ import dev.simhook.app.push.Push
 import dev.simhook.app.sms.SimInfo
 import dev.simhook.app.sms.SmsReceivedReceiver
 import java.io.IOException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -239,6 +244,12 @@ object HeartbeatScheduler {
  * check-in and outbox fetch regardless.
  */
 object ReportLedger {
+    /**
+     * How long a receiver may spend uploading at once. Android gives a
+     * foreground broadcast ten seconds; this leaves room for the rest.
+     */
+    const val IMMEDIATE_BUDGET_MS = 6_000L
+
     suspend fun status(context: Context, container: AppContainer, messageId: String, status: String, at: Long, code: String?, message: String?) {
         container.reports.insert(
             PendingReport(
@@ -247,7 +258,7 @@ object ReportLedger {
                 at = at, createdAt = System.currentTimeMillis(),
             ),
         )
-        ReportUploadWorker.enqueue(context)
+        settle(context, container)
     }
 
     suspend fun inbound(context: Context, container: AppContainer, sender: String, body: String, receivedAt: Long, fingerprint: String, sim: Int?) {
@@ -257,7 +268,19 @@ object ReportLedger {
                 at = receivedAt, createdAt = System.currentTimeMillis(),
             ),
         )
-        ReportUploadWorker.enqueue(context)
+        settle(context, container)
+    }
+
+    /**
+     * Uploads right away when it can, so a received text reaches the server
+     * inside the broadcast that delivered it instead of waiting for the job
+     * scheduler, which aggressive phones hold back for minutes or hours.
+     * Whatever is left, because the budget ran out or the server said no,
+     * falls to the worker.
+     */
+    private suspend fun settle(context: Context, container: AppContainer) {
+        val empty = runCatching { ReportUploader.flushWithin(container, IMMEDIATE_BUDGET_MS) }.getOrNull()
+        if (empty != true) ReportUploadWorker.enqueue(context)
     }
 }
 
@@ -300,8 +323,19 @@ object ReportUploader {
         else -> ReportOutcome.SKIP
     }
 
-    /** Sends what it can and returns true when nothing is left waiting. */
-    suspend fun flush(container: AppContainer): Boolean {
+    private val lock = Mutex()
+
+    /** Sends what it can and returns true when nothing is left waiting. One run at a time; a second caller waits for the first. */
+    suspend fun flush(container: AppContainer): Boolean = lock.withLock { flushLocked(container) }
+
+    /**
+     * flush with a time budget. True when the ledger is empty, false when
+     * something stays behind, null when the budget ran out, which includes
+     * waiting on a run already in progress, and that run is sending anyway.
+     */
+    suspend fun flushWithin(container: AppContainer, millis: Long): Boolean? = withTimeoutOrNull(millis) { flush(container) }
+
+    private suspend fun flushLocked(container: AppContainer): Boolean {
         val dao = container.reports
         var after = 0L
         var leftBehind = false
@@ -369,15 +403,27 @@ class ReportUploadWorker(context: Context, params: WorkerParameters) : Coroutine
     }
 
     companion object {
-        fun enqueue(context: Context) {
+        private const val NAME = "report-upload"
+
+        /**
+         * A run in progress reads the ledger again before it finishes, so a
+         * report added meanwhile goes with it and the run is kept. Anything
+         * else under the name is a retry parked on its backoff, up to five
+         * hours after a bad spell, and a new report must not wait behind it:
+         * it is replaced and the upload starts now.
+         */
+        fun policyFor(states: List<WorkInfo.State>): ExistingWorkPolicy =
+            if (states.any { it == WorkInfo.State.RUNNING }) ExistingWorkPolicy.KEEP else ExistingWorkPolicy.REPLACE
+
+        suspend fun enqueue(context: Context) {
+            val manager = WorkManager.getInstance(context)
+            val states = runCatching { manager.getWorkInfosForUniqueWorkFlow(NAME).first().map { it.state } }.getOrDefault(emptyList())
             val request = OneTimeWorkRequestBuilder<ReportUploadWorker>()
                 .setConstraints(networkConstraints)
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .build()
-            // One uploader at a time; a run in progress reads the ledger again
-            // before it finishes, so a report added meanwhile goes with it.
-            WorkManager.getInstance(context).enqueueUniqueWork("report-upload", ExistingWorkPolicy.KEEP, request)
+            manager.enqueueUniqueWork(NAME, policyFor(states), request)
         }
     }
 }
