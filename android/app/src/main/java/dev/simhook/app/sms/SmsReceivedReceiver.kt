@@ -22,9 +22,9 @@ class SmsReceivedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)?.takeIf { it.isNotEmpty() } ?: return
-        val sender = messages[0].originatingAddress ?: return
-        val body = truncate(messages.joinToString("") { it.messageBody ?: "" })
-        if (body.isEmpty()) return
+        val sender = clean(messages[0].originatingAddress ?: return)
+        val body = truncate(clean(messages.joinToString("") { it.messageBody ?: "" }))
+        if (sender.isEmpty() || body.isEmpty()) return
         val receivedAt = messages[0].timestampMillis
         val subscriptionId = intent.getIntExtra("subscription", -1).takeIf { it >= 0 }
         val fingerprint = fingerprint(sender, body, receivedAt)
@@ -53,6 +53,13 @@ class SmsReceivedReceiver : BroadcastReceiver() {
         const val MAX_BODY = 20_000
 
         fun truncate(body: String): String = if (body.length <= MAX_BODY) body else body.take(MAX_BODY - 1) + "…"
+
+        /**
+         * Some handsets decode a character of a text as U+0000. The server cannot
+         * store that byte, so it goes before the text is fingerprinted or written
+         * down; a NUL carries nothing a reader would miss.
+         */
+        fun clean(text: String): String = if (text.indexOf('\u0000') < 0) text else text.replace("\u0000", "")
 
         /** Stable identity for a received message, so retries and re-broadcasts never duplicate it. */
         fun fingerprint(sender: String, body: String, receivedAt: Long): String {

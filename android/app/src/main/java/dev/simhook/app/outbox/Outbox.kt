@@ -185,6 +185,10 @@ interface ReportDao {
     @Query("SELECT * FROM reports ORDER BY id ASC LIMIT :limit")
     suspend fun oldest(limit: Int): List<PendingReport>
 
+    /** The next page of the ledger after a report, so one the server keeps refusing can be left behind for now. */
+    @Query("SELECT * FROM reports WHERE id > :after ORDER BY id ASC LIMIT :limit")
+    suspend fun oldestAfter(after: Long, limit: Int): List<PendingReport>
+
     @Query("SELECT COUNT(*) FROM reports")
     suspend fun count(): Int
 
